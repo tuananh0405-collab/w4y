@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ["Recruiter", "Applicant"],
+    enum: ["Recruiter", "Applicant", "Admin"],
     required: true,
   },
   createdAt: {
