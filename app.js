@@ -1,5 +1,5 @@
 import express from "express";
-import { JWT_SECRET, PORT } from "./config/env.js";
+import { JWT_SECRET, PORT, NODE_ENV } from "./config/env.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 
@@ -22,21 +22,22 @@ app.use(cors({ origin: "http://localhost:3001", credentials: true }));
 
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/user", userRouter);
-app.use('/api/v1/applicant', applicantRouter)
-app.use('/api/v1/job', jobRouter)
-app.use('/api/v1/application', applicationRouter)
-app.use('/api/v1/payment', paymentRouter)
-app.use('/api/v1/review', reviewRouter)
+app.use("/api/v1/applicant", applicantRouter);
+app.use("/api/v1/job", jobRouter);
+app.use("/api/v1/application", applicationRouter);
+app.use("/api/v1/payment", paymentRouter);
+app.use("/api/v1/review", reviewRouter);
 app.use(errorMiddleware);
 
 app.get("/", (req, res) => {
   res.send("Welcom to the W4Y");
 });
 
-app.listen(PORT, async () => {
-  console.log(`listening on http://localhost:${PORT}`);
-
-  await connectToDatabase();
-});
+if (NODE_ENV !== "test") {
+  app.listen(PORT, async () => {
+    console.log(`listening on http://localhost:${PORT}`);
+    await connectToDatabase();
+  });
+}
 
 export default app;

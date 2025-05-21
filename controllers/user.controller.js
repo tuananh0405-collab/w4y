@@ -91,7 +91,9 @@ export const forgotPassword = async (req, res, next) => {
     };
 
     await transporter.sendMail(receiver);
-    return res.status(200).json({ success: "Rest password link sent to your email." });
+    return res
+      .status(200)
+      .json({ success: "Rest password link sent to your email." });
   } catch (error) {
     next(error);
   }
@@ -114,7 +116,9 @@ export const resetPassword = async (req, res) => {
     user.password = hashedPassword;
 
     await user.save();
-    return res.status(200).json({ message: "Password reset. Please log in again." });
+    return res
+      .status(200)
+      .json({ message: "Password reset. Please log in again." });
   } catch (error) {
     console.log(error);
 

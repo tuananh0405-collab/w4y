@@ -3,7 +3,12 @@ import User from "../models/user.model.js";
 import generateToken from "../utils/generateToken.js";
 import crypto from "crypto";
 import transporter from "../config/nodemailer.js";
-import { EMAIL_ACCOUNT, JWT_EXPIRES_IN, JWT_SECRET, NODE_ENV } from "../config/env.js";
+import {
+  EMAIL_ACCOUNT,
+  JWT_EXPIRES_IN,
+  JWT_SECRET,
+  NODE_ENV,
+} from "../config/env.js";
 import jwt from "jsonwebtoken";
 
 // Đăng ký người dùng
@@ -24,7 +29,7 @@ import jwt from "jsonwebtoken";
 //     const newUser = new User({
 //       name,
 //       email,
-//       password, 
+//       password,
 //       accountType,
 //     });
 
@@ -56,7 +61,17 @@ import jwt from "jsonwebtoken";
 
 export const signUp = async (req, res, next) => {
   try {
-    const { name, email, password, accountType, gender, phone, company, city, district } = req.body;
+    const {
+      name,
+      email,
+      password,
+      accountType,
+      gender,
+      phone,
+      company,
+      city,
+      district,
+    } = req.body;
 
     // Kiểm tra người dùng đã tồn tại chưa
     const existingUser = await User.findOne({ email });
@@ -85,7 +100,10 @@ export const signUp = async (req, res, next) => {
     newUser.password = await bcrypt.hash(password, salt);
 
     // Tạo mã xác minh
-    const verificationCode = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const verificationCode = crypto
+      .randomBytes(3)
+      .toString("hex")
+      .toUpperCase();
     newUser.verificationCode = verificationCode;
 
     // Lưu người dùng mới vào cơ sở dữ liệu
@@ -103,7 +121,8 @@ export const signUp = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Verification code sent to your email. Please verify your email before logging in.",
+      message:
+        "Verification code sent to your email. Please verify your email before logging in.",
     });
   } catch (error) {
     next(error);
@@ -186,16 +205,22 @@ export const verifyEmail = async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     // Kiểm tra mã xác minh
     if (user.isVerified) {
-      return res.status(400).json({ success: false, message: "Email already verified" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email already verified" });
     }
 
     if (user.verificationCode !== verificationCode) {
-      return res.status(400).json({ success: false, message: "Invalid verification code" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid verification code" });
     }
 
     // Mã hóa lại mật khẩu và xác minh email
@@ -239,7 +264,7 @@ export const refreshToken = async (req, res, next) => {
       httpOnly: true,
       secure: NODE_ENV !== "development",
       sameSite: "strict",
-      maxAge: 24*60*60*1000,
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.status(200).json({

@@ -4,10 +4,10 @@ import User from "../models/user.model.js";  // Đảm bảo bạn import User m
 // export const createJobPosting = async (req, res, next) => {
 //   try {
 //     const { title, description, requirements, salary, deliveryTime, priorityLevel } = req.body;
-//     const employerId = req.user._id;  // Lấy employerId từ token của người dùng đã đăng nhập
+//     const recruiterId = req.user._id;  // Lấy recruiterId từ token của người dùng đã đăng nhập
 
 //     // Kiểm tra xem công việc có tồn tại không
-//     const existingJob = await Job.findOne({ title, employerId });
+//     const existingJob = await Job.findOne({ title, recruiterId });
 
 //     if (existingJob) {
 //       return res.status(400).json({ message: "Job already posted" });
@@ -15,7 +15,7 @@ import User from "../models/user.model.js";  // Đảm bảo bạn import User m
 
 //     // Tạo một công việc mới
 //     const newJob = new Job({
-//       employerId,
+//       recruiterId,
 //       title,
 //       description,
 //       requirements,
@@ -26,14 +26,14 @@ import User from "../models/user.model.js";  // Đảm bảo bạn import User m
 
 //     await newJob.save();
 
-//     // Lấy thông tin nhà tuyển dụng (employerName) từ User model
-//     const employer = await User.findById(employerId).select("name");  // Lấy tên nhà tuyển dụng
+//     // Lấy thông tin nhà tuyển dụng (recruiterName) từ User model
+//     const recruiter = await User.findById(recruiterId).select("name");  // Lấy tên nhà tuyển dụng
 
 //     res.status(201).json({
 //       success: true,
 //       message: "Job posted successfully",
 //       data: {
-//         employerName: employer.name,
+//         recruiterName: recruiter.name,
 //         title: newJob.title,
 //         description: newJob.description,
 //         requirements: newJob.requirements,
@@ -66,10 +66,10 @@ export const createJobPosting = async (req, res, next) => {
       experience // Kinh nghiệm
     } = req.body;
     
-    const employerId = req.user._id;  // Lấy employerId từ token của người dùng đã đăng nhập
+    const recruiterId = req.user._id;  // Lấy recruiterId từ token của người dùng đã đăng nhập
 
     // Kiểm tra xem công việc có tồn tại không
-    const existingJob = await Job.findOne({ title, employerId });
+    const existingJob = await Job.findOne({ title, recruiterId });
 
     if (existingJob) {
       return res.status(400).json({ message: "Job already posted" });
@@ -77,7 +77,7 @@ export const createJobPosting = async (req, res, next) => {
 
     // Tạo một công việc mới
     const newJob = new Job({
-      employerId,
+      recruiterId,
       title,
       description,
       requirements,
@@ -94,14 +94,14 @@ export const createJobPosting = async (req, res, next) => {
 
     await newJob.save();
 
-    // Lấy thông tin nhà tuyển dụng (employerName) từ User model
-    const employer = await User.findById(employerId).select("name");  // Lấy tên nhà tuyển dụng
+    // Lấy thông tin nhà tuyển dụng (recruiterName) từ User model
+    const recruiter = await User.findById(recruiterId).select("name");  // Lấy tên nhà tuyển dụng
 
     res.status(201).json({
       success: true,
       message: "Job posted successfully",
       data: {
-        employerName: employer.name,
+        recruiterName: recruiter.name,
         title: newJob.title,
         description: newJob.description,
         requirements: newJob.requirements,
@@ -127,13 +127,13 @@ export const viewJobList = async (req, res, next) => {
     // Lấy danh sách công việc
     const jobs = await Job.find();
 
-    // Định dạng lại danh sách công việc, thêm thông tin employerName từ User
+    // Định dạng lại danh sách công việc, thêm thông tin recruiterName từ User
     const formattedJobs = await Promise.all(
       jobs.map(async (job) => {
-        const employer = await User.findById(job.employerId).select("name");  // Lấy tên nhà tuyển dụng
+        const recruiter = await User.findById(job.recruiterId).select("name");  // Lấy tên nhà tuyển dụng
         return {
         id:job._id,
-          employerName: employer.name,
+          recruiterName: recruiter.name,
           title: job.title,
           description: job.description,
           requirements: job.requirements,
@@ -163,7 +163,7 @@ export const viewJobDetail = async (req, res, next) => {
 
     // Tìm công việc theo jobId
     const job = await Job.findById(jobId);
-    const employer = await User.findById(job.employerId).select("name");  // Lấy tên nhà tuyển dụng
+    const recruiter = await User.findById(job.recruiterId).select("name");  // Lấy tên nhà tuyển dụng
 
     if (!job) {
       return res.status(404).json({ message: "Job not found" });
@@ -173,7 +173,7 @@ export const viewJobDetail = async (req, res, next) => {
       success: true,
       message: "Job detail fetched successfully",
       data: {
-          employerName: employer.name,
+          recruiterName: recruiter.name,
           title: job.title,
           description: job.description,
           requirements: job.requirements,

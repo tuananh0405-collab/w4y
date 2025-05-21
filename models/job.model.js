@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 // Job Schema
 const jobSchema = new mongoose.Schema({
-  employerId: {
+  recruiterId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
@@ -17,34 +17,40 @@ const jobSchema = new mongoose.Schema({
   deliveryTime: String,
   priorityLevel: {
     type: String,
-    enum: ["Nổi bật", "Thông thường"],
-    default: "Thông thường",
+    enum: ["Featured", "Regular"],
+    default: "Regular",
   },
   createdAt: {
     type: Date,
     default: Date.now,
   },
-  quantity: {  // Số lượng người tuyển dụng
+  quantity: {
+    // Số lượng người tuyển dụng
     type: Number,
     // required: true,
   },
-  level: {  // Cấp bậc
+  level: {
+    // Cấp bậc
     type: String,
     // required: true,
   },
-  industry: {  // Ngành nghề
+  industry: {
+    // Ngành nghề
     type: String,
     // required: true,
   },
-  position: {  // Chức danh
+  position: {
+    // Chức danh
     type: String,
     // required: true,
   },
-  location: {  // Địa điểm làm việc
+  location: {
+    // Địa điểm làm việc
     type: String,
     // required: true,
   },
-  experience: {  // Kinh nghiệm
+  experience: {
+    // Kinh nghiệm
     type: String,
     // required: true,
   },

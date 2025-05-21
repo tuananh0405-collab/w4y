@@ -1,5 +1,5 @@
 // Import dependencies
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 // User Schema
 const userSchema = new mongoose.Schema({
@@ -18,31 +18,36 @@ const userSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ['Nhà Tuyển Dụng', 'Ứng Viên'],
+    enum: ["Recruiter", "Applicant"],
     required: true,
   },
   createdAt: {
     type: Date,
     default: Date.now,
   },
-  isVerified: { type: Boolean, default: false }, 
-  verificationCode: String, 
-  gender: {  // Thêm trường giới tính
+  isVerified: { type: Boolean, default: false },
+  verificationCode: String,
+  gender: {
+    // Thêm trường giới tính
     type: String,
-    enum: ['male', 'female'],
+    enum: ["male", "female"],
   },
-  phone: {  // Thêm trường số điện thoại
-    type: String,
-  },
-  company: {  // Thêm trường công ty
-    type: String,
-  },
-  city: {  // Thêm trường tỉnh/thành phố
+  phone: {
+    // Thêm trường số điện thoại
     type: String,
   },
-  district: {  // Thêm trường quận/huyện
+  company: {
+    // Thêm trường công ty
     type: String,
-  }
+  },
+  city: {
+    // Thêm trường tỉnh/thành phố
+    type: String,
+  },
+  district: {
+    // Thêm trường quận/huyện
+    type: String,
+  },
 });
- const User = mongoose.model('User', userSchema);
- export default User;
+const User = mongoose.model("User", userSchema);
+export default User;
