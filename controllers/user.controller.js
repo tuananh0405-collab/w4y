@@ -206,9 +206,12 @@ export const getAllUsers = async (req, res, next) => {
       ];
     }
 
-    // Filter by account type
+    // Filter by account type - handle case sensitivity
     if (req.query.accountType) {
-      query.accountType = req.query.accountType;
+      // Convert to proper case format
+      const accountType = req.query.accountType.charAt(0).toUpperCase() + 
+                         req.query.accountType.slice(1).toLowerCase();
+      query.accountType = accountType;
     }
 
     // Filter by verification status
