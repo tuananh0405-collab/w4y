@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getProfile, uploadCV } from "../controllers/applicant.controller.js";
+import { getProfile, uploadCV} from "../controllers/applicant.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
 const applicantRouter = Router()

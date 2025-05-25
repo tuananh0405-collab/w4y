@@ -1,20 +1,33 @@
 import multer from 'multer';
 import path from 'path';
 import ApplicantProfile from '../models/applicantProfile.model.js';
+import cloudinary from '../config/cloudinary.js';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
-// Cấu hình lưu file CV với multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/cvs/'); // Đảm bảo bạn có thư mục 'uploads/cvs' trong dự án
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, 'uploads/cvs/'); // Đảm bảo bạn có thư mục 'uploads/cvs' trong dự án
+//   },
+//   filename: (req, file, cb) => {
+//     const ext = path.extname(file.originalname);
+//     // cb(null, `${req.user._id}-${Date.now()}${ext}`); // Tên file sẽ là userId + thời gian
+//     cb(null, `phuctest-${Date.now()}${ext}`); // Tên file sẽ là userId + thời gian
+//   }
+// });
+
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params:{
+    resource_type: 'raw',
+    public_id: (req, file) => {
+      const ext = path.extname(file.originalname);
+      return `${req.user._id}-${Date.now()}${ext}`;
+    },
   },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${req.user._id}-${Date.now()}${ext}`); // Tên file sẽ là userId + thời gian
-  }
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /pdf|docx|txt/;
+  const allowedTypes = /pdf|docx|txt|document/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowedTypes.test(file.mimetype);
 
@@ -25,13 +38,14 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Cấu hình lưu file CV với multer
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }  // Giới hạn kích thước file tối đa (10MB)
 });
 
-// Upload CV
+// Upload CV to Cloudinary
 export const uploadCV = [
   upload.single('resumeFile'),  // Đảm bảo rằng tên trường trong form-data là 'resumeFile'
   async (req, res, next) => {
