@@ -124,9 +124,15 @@ export const createJobPosting = async (req, res, next) => {
 
 export const viewJobList = async (req, res, next) => {
   try {
-    // Lấy danh sách công việc
-    const jobs = await Job.find();
+     const { location, position } = req.query; // Lấy location và position từ query string
 
+    // Xây filter động nếu có location hoặc position
+    const filter = {};
+    if (location) filter.location = location;
+    if (position) filter.position = position;
+
+    // Lấy danh sách công việc theo filter
+    const jobs = await Job.find(filter);
     // Định dạng lại danh sách công việc, thêm thông tin employerName từ User
     const formattedJobs = await Promise.all(
       jobs.map(async (job) => {
@@ -141,6 +147,7 @@ export const viewJobList = async (req, res, next) => {
           deliveryTime: job.deliveryTime,
           priorityLevel: job.priorityLevel,
           createdAt: job.createdAt,
+          location: job.location
         };
       })
     );
@@ -236,6 +243,53 @@ export const deleteJob = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: "Job deleted successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getFilterOptions = async (req, res, next) => {
+  try {
+    // Lấy danh sách location duy nhất
+    const locations = await Job.distinct("location");
+
+    // Lấy danh sách position duy nhất (giả sử trường này là 'position')
+    const positions = await Job.distinct("position");
+
+    res.status(200).json({
+      success: true,
+      message: "Filter options fetched successfully",
+      data: {
+        locations,
+        positions,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Endpoint lấy job theo employerId
+export const getJobsByEmployer = async (req, res, next) => {
+  try {
+    const { employerId } = req.params; // Lấy employerId từ params URL
+
+    // Kiểm tra employerId có hợp lệ không
+    if (!employerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employer ID is required",
+      });
+    }
+
+    // Tìm job theo employerId
+    const jobs = await Job.find({ employerId });
+
+    res.status(200).json({
+      success: true,
+      message: `Jobs fetched for employer ${employerId}`,
+      data: jobs,
     });
   } catch (error) {
     next(error);

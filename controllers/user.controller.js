@@ -4,29 +4,50 @@ import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { generateEmailTemplate } from "../utils/email-template.js";
+import ApplicantProfile from "../models/applicantProfile.model.js";
 
 export const getUser = async (req, res, next) => {
   try {
     // Lấy userId từ JWT trong cookie
     const userId = req.user._id;
 
-    // Tìm người dùng trong database theo userId
-    const user = await User.findById(userId).select("-password");
+    // // Tìm người dùng trong database theo userId
+    // const user = await User.findById(userId).select("-password");
 
+    // if (!user) {
+    //   const error = new Error("User not found");
+    //   error.statusCode = 404;
+    //   throw error;
+    // }
+
+    // res.status(200).json({
+    //   user: {
+    //     id: user._id,
+    //     name: user.name,
+    //     email: user.email,
+    //     accountType: user.accountType,
+    //     isVerified: user.isVerified,
+    //     createdAt: user.createdAt,
+    //   },
+    // });
+
+    // Tìm user lấy thông tin cơ bản
+    const user = await User.findById(userId).select('name email phone');
     if (!user) {
-      const error = new Error("User not found");
-      error.statusCode = 404;
-      throw error;
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Tìm ApplicantProfile theo userId lấy skills, education
+    const profile = await ApplicantProfile.findOne({ userId }).select('skills education');
+
     res.status(200).json({
-      user: {
-        id: user._id,
+      success: true,
+      data: {
         name: user.name,
         email: user.email,
-        accountType: user.accountType,
-        isVerified: user.isVerified,
-        createdAt: user.createdAt,
+        phone: user.phone,
+        skills: profile?.skills || [],
+        education: profile?.education || '',
       },
     });
   } catch (error) {

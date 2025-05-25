@@ -134,3 +134,33 @@ export const viewApplicationStatus = async (req, res, next) => {
       next(error);
     }
   };
+
+
+// Ứng dụng có thể nhận query param: jobIds=job1,job2,job3
+export const getApplications = async (req, res, next) => {
+   try {
+    // Có thể lọc theo employerId (từ jobs) hoặc jobIds theo query param
+    const { employerId } = req.query;
+
+    let filter = {};
+    if (employerId) {
+      // Lấy danh sách jobId của employer này
+      const jobs = await Job.find({ employerId }, '_id');
+      const jobIds = jobs.map(j => j._id);
+      filter.jobId = { $in: jobIds };
+    }
+
+    const applications = await Application.find(filter)
+      .populate('applicantId', 'name experience') // lấy tên và kinh nghiệm user
+      .populate('jobId', 'position createdAt')   // lấy vị trí và ngày tạo job
+      .exec();
+
+    res.status(200).json({
+      success: true,
+      message: 'Applications with user and job info fetched successfully',
+      data: applications,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
