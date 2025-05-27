@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { getProfile, uploadCV } from "../controllers/applicant.controller.js";
+import { countApplicationsByApplicant, getProfile, uploadCV } from "../controllers/applicant.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
 const applicantRouter = Router()
 
 applicantRouter.post('/upload-cv',authenticate, uploadCV)
 applicantRouter.get('/get-profile/:userId',authenticate, getProfile)
+applicantRouter.get('/count', authenticate, countApplicationsByApplicant);
 
 // router.get('/cv/:fileName', (req, res, next) => {
 //     const fileName = req.params.fileName;

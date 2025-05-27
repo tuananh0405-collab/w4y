@@ -164,3 +164,4 @@ export const getApplications = async (req, res, next) => {
     next(error);
   }
 };
+

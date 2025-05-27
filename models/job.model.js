@@ -24,6 +24,10 @@ const jobSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  deadline: {  // Thêm trường hạn nộp hồ sơ
+    type: Date,
+    required: false,  // Có thể không bắt buộc nếu bạn muốn
+  },
   quantity: {  // Số lượng người tuyển dụng
     type: Number,
     // required: true,

@@ -11,10 +11,13 @@ const applicantProfileSchema = new mongoose.Schema({
   education: String,
   skills: [String],
   experience: String,
-  resumeFile: {
-    path: String,  // Lưu trữ đường dẫn tới tệp thay vì lưu trữ tệp trực tiếp
-    contentType: String,
-  },
+  resumeFiles: [  // Thay đổi ở đây: mảng chứa nhiều file
+    {
+      path: String,
+      contentType: String,
+      uploadedAt: { type: Date, default: Date.now }  // có thể thêm trường thời gian upload
+    }
+  ],
 });
 
  const ApplicantProfile = mongoose.model(

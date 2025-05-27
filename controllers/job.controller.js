@@ -63,7 +63,8 @@ export const createJobPosting = async (req, res, next) => {
       industry,  // Ngành nghề
       position,  // Chức danh
       location,  // Địa điểm làm việc
-      experience // Kinh nghiệm
+      experience, // Kinh nghiệm
+      deadline
     } = req.body;
     
     const employerId = req.user._id;  // Lấy employerId từ token của người dùng đã đăng nhập
@@ -90,6 +91,7 @@ export const createJobPosting = async (req, res, next) => {
       position,     // Chức danh
       location,     // Địa điểm làm việc
       experience,   // Kinh nghiệm
+      deadline
     });
 
     await newJob.save();
@@ -114,6 +116,7 @@ export const createJobPosting = async (req, res, next) => {
         position: newJob.position,    // Chức danh
         location: newJob.location,    // Địa điểm làm việc
         experience: newJob.experience, // Kinh nghiệm
+        deadline: newJob.deadline,
         createdAt: newJob.createdAt,
       },
     });
@@ -190,6 +193,7 @@ export const viewJobDetail = async (req, res, next) => {
           deliveryTime: job.deliveryTime,
           priorityLevel: job.priorityLevel,
           createdAt: job.createdAt,
+          deadline: job.deadline
       },
     });
   } catch (error) {
