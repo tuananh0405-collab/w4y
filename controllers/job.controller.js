@@ -147,7 +147,8 @@ export const viewJobList = async (req, res, next) => {
           deliveryTime: job.deliveryTime,
           priorityLevel: job.priorityLevel,
           createdAt: job.createdAt,
-          location: job.location
+          location: job.location,
+          experience: job.experience
         };
       })
     );
@@ -184,6 +185,7 @@ export const viewJobDetail = async (req, res, next) => {
           title: job.title,
           description: job.description,
           requirements: job.requirements,
+          experience: job.experience,
           salary: job.salary,
           deliveryTime: job.deliveryTime,
           priorityLevel: job.priorityLevel,

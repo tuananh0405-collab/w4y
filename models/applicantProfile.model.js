@@ -7,6 +7,7 @@ const applicantProfileSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+    jobTitle: { type: String, default: '' },   // Thêm trường chức danh
   education: String,
   skills: [String],
   experience: String,
