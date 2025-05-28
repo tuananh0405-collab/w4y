@@ -13,12 +13,24 @@ import reviewRouter from "./routes/review.routes.js";
 import connectToDatabase from "./database/mongodb.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Thêm đoạn này để lấy __dirname trong ES module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({ origin: "http://localhost:3001", credentials: true }));
+
+
+// Thêm serve static để phục vụ thư mục uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/user", userRouter);

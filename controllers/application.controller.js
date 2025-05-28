@@ -3,6 +3,8 @@ import path from 'path';
 import Application from "../models/application.model.js";
 import Job from "../models/job.model.js";
 import ApplicantProfile from "../models/applicantProfile.model.js";
+import transporter from '../config/nodemailer.js';
+import { EMAIL_ACCOUNT } from '../config/env.js';
 
 // Cấu hình multer để lưu file CV với multer
 const storage = multer.diskStorage({
@@ -165,3 +167,83 @@ export const getApplications = async (req, res, next) => {
   }
 };
 
+// export const updateApplicationStatus = async (req, res, next) => {
+//   try {
+//     const { applicationId } = req.params;
+//     const { status } = req.body;
+
+//     // Validate status nếu cần (ví dụ chỉ chấp nhận 1 số trạng thái cụ thể)
+//     const validStatuses = ['Pending', 'Phỏng vấn', 'Từ chối', 'Mới nhận'];
+//     if (!validStatuses.includes(status)) {
+//       return res.status(400).json({ success: false, message: 'Trạng thái không hợp lệ' });
+//     }
+
+//     // Cập nhật trạng thái trong database
+//     const updatedApplication = await Application.findByIdAndUpdate(
+//       applicationId,
+//       { status },
+//       { new: true }
+//     );
+
+//     if (!updatedApplication) {
+//       return res.status(404).json({ success: false, message: 'Ứng dụng không tồn tại' });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Cập nhật trạng thái thành công',
+//       data: updatedApplication,
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// };
+
+
+export const updateApplicationStatus = async (req, res, next) => {
+  try {
+    const { applicationId } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['Pending', 'Phỏng vấn', 'Từ chối', 'Mới nhận'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Trạng thái không hợp lệ' });
+    }
+
+    // Cập nhật trạng thái
+    const application = await Application.findById(applicationId)
+      .populate('applicantId'); // Lấy thông tin applicant để lấy email
+
+    if (!application) {
+      return res.status(404).json({ success: false, message: 'Ứng dụng không tồn tại' });
+    }
+
+    application.status = status;
+    await application.save();
+
+    // Gửi mail thông báo
+    const mailOptions = {
+      from: EMAIL_ACCOUNT,
+      to: application.applicantId.email, // email ứng viên
+      subject: 'Thông báo kết quả ứng tuyển',
+      text: `Xin chào ${application.applicantId.name},
+
+Đơn ứng tuyển vị trí "${application.jobId.position}" của bạn đã được cập nhật trạng thái: ${status}.
+
+Cảm ơn bạn đã quan tâm và ứng tuyển.
+
+Trân trọng,
+Đội ngũ tuyển dụng`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({
+      success: true,
+      message: 'Cập nhật trạng thái thành công và gửi mail thông báo.',
+      data: application,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
