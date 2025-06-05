@@ -2,6 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import ApplicantProfile from '../models/applicantProfile.model.js';
 import Application from '../models/application.model.js';
+import User from '../models/user.model.js';
 
 // Cấu hình lưu file CV với multer
 const storage = multer.diskStorage({
@@ -138,6 +139,79 @@ export const countApplicationsByApplicant = async (req, res, next) => {
       success: true,
       message: "Count of applications fetched successfully",
       data: { totalApplications: count },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Tìm kiếm ứng viên
+export const searchApplicants = async (req, res, next) => {
+  try {
+    // Kiểm tra accountType của người dùng
+    if (req.user.accountType !== 'Nhà Tuyển Dụng') {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ nhà tuyển dụng mới có thể tìm kiếm ứng viên.',
+      });
+    }
+
+    const { jobTitle, skills, experience, location } = req.query;
+
+    // Xây dựng điều kiện tìm kiếm
+    const query = {};
+
+    if (jobTitle) {
+      query['profile.jobTitle'] = { $regex: jobTitle, $options: 'i' }; // Tìm kiếm không phân biệt chữ hoa/thường
+    }
+
+    if (skills) {
+      query['profile.skills'] = { $regex: skills, $options: 'i' };
+    }
+
+    if (experience) {
+      query['profile.experience'] = { $regex: experience, $options: 'i' };
+    }
+
+    if (location) {
+      query['profile.city'] = { $regex: location, $options: 'i' };
+    }
+
+    // Tìm ứng viên với các điều kiện trên
+    const applicants = await User.aggregate([
+      {
+        $match: { accountType: 'Ứng Viên' }  // Lọc để chỉ trả về ứng viên
+      },
+      {
+        $lookup: {
+          from: 'applicantprofiles',  // Kết nối với collection applicantProfiles
+          localField: '_id',           // Sử dụng _id từ bảng users
+          foreignField: 'userId',      // Liên kết với trường userId trong applicantProfiles
+          as: 'profile'
+        }
+      },
+      {
+        $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } // Tránh trường hợp không có profile
+      },
+      {
+        $match: query  // Áp dụng các điều kiện tìm kiếm
+      },
+      {
+        $project: {  // Chỉ lấy các trường cần thiết
+          _id: 0,
+          name: 1,
+          "profile.jobTitle": 1,  // Lấy thông tin jobTitle từ profile
+          "profile.experience": 1,  // Lấy thông tin experience từ profile
+          "profile.skills": 1,  // Lấy thông tin experience từ profile
+          city: 1
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Danh sách ứng viên được tìm thấy.',
+      data: applicants,
     });
   } catch (error) {
     next(error);
