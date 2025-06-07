@@ -10,6 +10,7 @@ import {
   getJobStatistics,
   getRecruitmentList,
   getRecruiterDetails,
+  getApplications,
 } from "../controllers/job.controller.js";
 import { authenticate, authorizeAdmin } from "../middlewares/auth.middleware.js";
 
@@ -30,5 +31,10 @@ jobRouter.delete("/delete/:jobId", authenticate, deleteJob);
 jobRouter.get("/statistics", authenticate, getJobStatistics);
 jobRouter.get("/recruitment-list", authenticate, authorizeAdmin, getRecruitmentList);
 jobRouter.get("/recruiter/:recruiterId", authenticate, authorizeAdmin, getRecruiterDetails);
+jobRouter.get('/applications/:employerId', authenticate, getApplications);
+
+// Payment routes
+jobRouter.post('/checkout', authenticate, checkoutPayment)
+jobRouter.get("/history/:userId", authenticate, viewPaymentHistory)
 
 export default jobRouter;

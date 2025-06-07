@@ -89,7 +89,7 @@ export const uploadCV = [
       if (applicantProfile) {
         // Kiểm tra số lượng file hiện có
         if (applicantProfile.resumeFiles.length >= 3) {
-          return res.status(400).json({ success: false, message: "Bạn chỉ có thể upload tối đa 3 CV" });
+          return res.status(400).json({ success: false, message: "You can only upload up to 3 CVs" });
         }
 
         // Thêm file mới vào mảng resumeFiles
@@ -150,7 +150,7 @@ export const countApplicationsByApplicant = async (req, res, next) => {
 export const searchApplicants = async (req, res, next) => {
   try {
     // Kiểm tra accountType của người dùng
-    if (req.user.accountType !== 'Nhà Tuyển Dụng') {
+    if (req.user.accountType !== 'Recruiter') {
       return res.status(403).json({
         success: false,
         message: 'Chỉ nhà tuyển dụng mới có thể tìm kiếm ứng viên.',
@@ -181,7 +181,7 @@ export const searchApplicants = async (req, res, next) => {
     // Tìm ứng viên với các điều kiện trên
     const applicants = await User.aggregate([
       {
-        $match: { accountType: 'Ứng Viên' }  // Lọc để chỉ trả về ứng viên
+        $match: { accountType: 'Applicant' }  // Lọc để chỉ trả về ứng viên
       },
       {
         $lookup: {

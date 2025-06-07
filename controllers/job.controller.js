@@ -251,9 +251,7 @@ export const viewJobList = async (req, res, next) => {
           position: job.position,
           location: job.location,
           experience: job.experience,
-          createdAt: job.createdAt,
-          location: job.location,
-          experience: job.experience
+          createdAt: job.createdAt
         };
       })
     );
@@ -320,7 +318,7 @@ export const viewJobDetail = async (req, res, next) => {
       success: true,
       message: "Job detail fetched successfully",
       data: {
-          employerName: employer.name,
+          employerName: recruiter.name,
           title: job.title,
           description: job.description,
           requirements: job.requirements,
@@ -560,16 +558,16 @@ export const getJobsByEmployer = async (req, res, next) => {
     if (!employerId) {
       return res.status(400).json({
         success: false,
-        message: "Employer ID is required",
+        message: "Recruiter ID is required",
       });
     }
 
     // Tìm job theo employerId
-    const jobs = await Job.find({ employerId });
+    const jobs = await Job.find({ recruiterId: employerId });
 
     res.status(200).json({
       success: true,
-      message: `Jobs fetched for employer ${employerId}`,
+      message: `Jobs fetched for recruiter ${employerId}`,
       data: jobs,
     });
   } catch (error) {

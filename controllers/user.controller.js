@@ -385,7 +385,7 @@ export const forgotPassword = async (req, res, next) => {
     await transporter.sendMail(receiver);
     return res
       .status(200)
-      .json({ success: "Rest password link sent to your email." });
+      .json({ message: "Reset password link sent to your email." });
   } catch (error) {
     next(error);
   }
@@ -402,7 +402,9 @@ export const resetPassword = async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const user = await User.findOne({ email: decoded.email });
-
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     user.password = hashedPassword;

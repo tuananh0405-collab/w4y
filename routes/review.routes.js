@@ -4,7 +4,7 @@ import { authenticate } from "../middlewares/auth.middleware.js";
 
 const reviewRouter = Router()
 
-reviewRouter.post('/create/:reviewUserId', reviewCandidate)
-reviewRouter.get('/list/:userId', viewUserReviews)
+reviewRouter.post('/create/:reviewUserId',authenticate, reviewCandidate)
+reviewRouter.get('/list/:userId',authenticate, viewUserReviews)
 
 export default reviewRouter

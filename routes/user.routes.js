@@ -25,10 +25,6 @@ userRouter.put("/update", authenticate, updateUserByID);
 userRouter.route("/forgot_password").post(forgotPassword);
 userRouter.route("/reset_password/:token").post(resetPassword);
 
-// Protected routes
-userRouter.get("/profile", authenticate, getUser);
-userRouter.put("/update", authenticate, updateUserByID);
-
 // Admin routes
 userRouter.post("/admin/create", authenticate, authorizeAdmin, createUser);
 userRouter.put("/admin/update/:userId", authenticate, authorizeAdmin, adminUpdateUser);
