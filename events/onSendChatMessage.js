@@ -3,7 +3,7 @@ const { default: ChatMessage } = require("../models/chatMessage.model");
 const { JWT_SECRET } = require("../config/env");
 
 export const setOnSendChatMessage = (sockio, socket, UsersConnectionList) => {
-  socket.on("chatMsg", ({ chatToken, message }) => {
+  socket.on("chatMsg", ({ chatToken, receiver_id, message }) => {
     jwt.verify(chatToken, JWT_SECRET, async (err, decoded) => {
       if (err) {
         if (err.name === "TokenExpiredError") {
@@ -19,15 +19,15 @@ export const setOnSendChatMessage = (sockio, socket, UsersConnectionList) => {
             message: "Token error",
           });
         }
-      } else if (!decoded.sender_id || !decoded.receiver_id) {
+      } else if (!decoded.sender_id) {
         socket.emit("sendMessageError", {
           success: false,
           statusCode: 400,
-          message: "Faulty token (missing sender_id, receiver_id, or both)",
+          message: "Faulty token (missing sender_id)",
         });
       } else {
         try {
-          const { sender_id, receiver_id } = decoded;
+          const { sender_id } = decoded;
           const sender = await ChatMessage.findById(sender_id);
           if (!sender) {
             socket.emit("sendMessageError", {
