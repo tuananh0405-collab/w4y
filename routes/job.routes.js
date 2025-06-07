@@ -2,6 +2,8 @@ import { Router } from "express";
 import {
   createJobPosting,
   deleteJob,
+  getFilterOptions,
+  getJobsByEmployer,
   updateJob,
   viewJobDetail,
   viewJobList,
@@ -15,6 +17,8 @@ const jobRouter = Router();
 
 // Public routes
 jobRouter.get("/list", viewJobList);
+jobRouter.get("/get-by-employer/:employerId", getJobsByEmployer);
+jobRouter.get("/get-filter-options", getFilterOptions);
 jobRouter.get("/detail/:jobId", viewJobDetail);
 
 // Protected routes

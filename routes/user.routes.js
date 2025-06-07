@@ -4,6 +4,7 @@ import {
   getUser,
   resetPassword,
   updateUserByID,
+  updateUserProfile,
   createUser,
   adminUpdateUser,
   deleteUser,
@@ -18,7 +19,9 @@ import {
 
 const userRouter = Router();
 
-// Public routes
+userRouter.get("/profile", authenticate, getUser);
+userRouter.patch('/profile', authenticate, updateUserProfile);
+userRouter.put("/update", authenticate, updateUserByID);
 userRouter.route("/forgot_password").post(forgotPassword);
 userRouter.route("/reset_password/:token").post(resetPassword);
 

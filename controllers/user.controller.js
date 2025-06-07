@@ -4,6 +4,7 @@ import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { generateEmailTemplate } from "../utils/email-template.js";
+import ApplicantProfile from "../models/applicantProfile.model.js";
 import Job from "../models/job.model.js";
 
 // Admin: Create new user (o)
@@ -299,23 +300,25 @@ export const getUser = async (req, res, next) => {
     // Lấy userId từ JWT trong cookie
     const userId = req.user._id;
 
-    // Tìm người dùng trong database theo userId
-    const user = await User.findById(userId).select("-password");
-
+    // Tìm user lấy thông tin cơ bản
+    const user = await User.findById(userId).select('name email phone');
     if (!user) {
-      const error = new Error("User not found");
-      error.statusCode = 404;
-      throw error;
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Tìm ApplicantProfile theo userId lấy skills, education
+    const profile = await ApplicantProfile.findOne({ userId }).select('skills education jobTitle resumeFiles');
+
     res.status(200).json({
-      user: {
-        id: user._id,
+      success: true,
+      data: {
         name: user.name,
         email: user.email,
-        accountType: user.accountType,
-        isVerified: user.isVerified,
-        createdAt: user.createdAt,
+        phone: user.phone,
+        skills: profile?.skills || [],
+        education: profile?.education || '',
+        jobTitle: profile?.jobTitle || '',
+        resumeFiles: profile?.resumeFiles || [],
       },
     });
   } catch (error) {
@@ -412,6 +415,54 @@ export const resetPassword = async (req, res) => {
     console.log(error);
 
     return res.status(500).json({ message: "Error" });
+  }
+};
+
+export const updateUserProfile = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    // Cập nhật user cơ bản (email, phone,...)
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.email = req.body.email || user.email;
+    user.phone = req.body.phone || user.phone;
+    user.city = req.body.city || user.city;
+    user.district = req.body.district || user.district;
+
+    await user.save();
+
+    // Cập nhật hoặc tạo ApplicantProfile (skills, jobTitle)
+    let profile = await ApplicantProfile.findOne({ userId });
+    if (!profile) {
+      profile = new ApplicantProfile({ userId });
+    }
+
+    profile.jobTitle = req.body.jobTitle || profile.jobTitle;
+    profile.skills = req.body.skills || profile.skills; // expects array of strings
+
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          phone: user.phone,
+          city: user.city,
+          district: user.district,
+        },
+        profile: {
+          jobTitle: profile.jobTitle,
+          skills: profile.skills,
+        }
+      }
+    });
+
+  } catch (error) {
+    next(error);
   }
 };
 

@@ -57,12 +57,13 @@ export const createJobPosting = async (req, res, next) => {
       salary,
       deliveryTime,
       priorityLevel,
-      quantity, // Số lượng người tuyển dụng
-      level, // Cấp bậc
-      industry, // Ngành nghề
-      position, // Chức danh
-      location, // Địa điểm làm việc
+      quantity,  // Số lượng người tuyển dụng
+      level,     // Cấp bậc
+      industry,  // Ngành nghề
+      position,  // Chức danh
+      location,  // Địa điểm làm việc
       experience, // Kinh nghiệm
+      deadline
     } = req.body;
 
     const recruiterId = req.user._id; // Lấy recruiterId từ token của người dùng đã đăng nhập
@@ -83,12 +84,13 @@ export const createJobPosting = async (req, res, next) => {
       salary,
       deliveryTime,
       priorityLevel,
-      quantity, // Số lượng người tuyển dụng
-      level, // Cấp bậc
-      industry, // Ngành nghề
-      position, // Chức danh
-      location, // Địa điểm làm việc
-      experience, // Kinh nghiệm
+      quantity,     // Số lượng người tuyển dụng
+      level,        // Cấp bậc
+      industry,     // Ngành nghề
+      position,     // Chức danh
+      location,     // Địa điểm làm việc
+      experience,   // Kinh nghiệm
+      deadline
     });
 
     await newJob.save();
@@ -113,6 +115,7 @@ export const createJobPosting = async (req, res, next) => {
         position: newJob.position, // Chức danh
         location: newJob.location, // Địa điểm làm việc
         experience: newJob.experience, // Kinh nghiệm
+        deadline: newJob.deadline,
         createdAt: newJob.createdAt,
       },
     });
@@ -249,6 +252,8 @@ export const viewJobList = async (req, res, next) => {
           location: job.location,
           experience: job.experience,
           createdAt: job.createdAt,
+          location: job.location,
+          experience: job.experience
         };
       })
     );
@@ -315,14 +320,16 @@ export const viewJobDetail = async (req, res, next) => {
       success: true,
       message: "Job detail fetched successfully",
       data: {
-        recruiterName: recruiter.name,
-        title: job.title,
-        description: job.description,
-        requirements: job.requirements,
-        salary: job.salary,
-        deliveryTime: job.deliveryTime,
-        priorityLevel: job.priorityLevel,
-        createdAt: job.createdAt,
+          employerName: employer.name,
+          title: job.title,
+          description: job.description,
+          requirements: job.requirements,
+          experience: job.experience,
+          salary: job.salary,
+          deliveryTime: job.deliveryTime,
+          priorityLevel: job.priorityLevel,
+          createdAt: job.createdAt,
+          deadline: job.deadline
       },
     });
   } catch (error) {
@@ -517,6 +524,53 @@ export const getRecruiterDetails = async (req, res, next) => {
         jobs: jobs,
         responseRates: responseRates,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getFilterOptions = async (req, res, next) => {
+  try {
+    // Lấy danh sách location duy nhất
+    const locations = await Job.distinct("location");
+
+    // Lấy danh sách position duy nhất (giả sử trường này là 'position')
+    const positions = await Job.distinct("position");
+
+    res.status(200).json({
+      success: true,
+      message: "Filter options fetched successfully",
+      data: {
+        locations,
+        positions,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Endpoint lấy job theo employerId
+export const getJobsByEmployer = async (req, res, next) => {
+  try {
+    const { employerId } = req.params; // Lấy employerId từ params URL
+
+    // Kiểm tra employerId có hợp lệ không
+    if (!employerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employer ID is required",
+      });
+    }
+
+    // Tìm job theo employerId
+    const jobs = await Job.find({ employerId });
+
+    res.status(200).json({
+      success: true,
+      message: `Jobs fetched for employer ${employerId}`,
+      data: jobs,
     });
   } catch (error) {
     next(error);
