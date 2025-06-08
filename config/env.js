@@ -19,5 +19,6 @@ export const {
   VNP_URL,
   VNP_RETURN_URL,
   VNP_API_URL,
-  GOOGLE_CLIENT_ID
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET
 } = process.env;

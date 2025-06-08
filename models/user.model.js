@@ -18,8 +18,13 @@ const userSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ['Nhà Tuyển Dụng', 'Ứng Viên'],
+    enum: ['Nhà tuyển dụng', 'Ứng viên'],
     required: true,
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true,
   },
   createdAt: {
     type: Date,
