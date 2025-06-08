@@ -1,80 +1,57 @@
-const jwt = require("jsonwebtoken");
-const { default: ChatMessage } = require("../models/chatMessage.model");
-const { JWT_SECRET } = require("../config/env");
+import ChatMessage from "../models/chatMessage.model.js";
+import User from "../models/user.model.js";
+import makeConvesationId from "../utils/makeConversationId.js";
+import withChatTokenValidation from "../utils/withChatTokenValidation.js";
 
-export const setOnSendChatMessage = (sockio, socket, UsersConnectionList) => {
-  socket.on("chatMsg", ({ chatToken, receiver_id, message }) => {
-    jwt.verify(chatToken, JWT_SECRET, async (err, decoded) => {
-      if (err) {
-        if (err.name === "TokenExpiredError") {
-          socket.emit("sendMessageError", {
-            success: false,
-            statusCode: 401,
-            message: "Token expired",
-          });
-        } else {
+export const setOnSendChatMessage = (
+  sockio,
+  socket,
+  UsersActiveConversationMap,
+) => {
+  socket.on("sendChatMessage", ({ chatToken, receiverId, message }) => {
+    withChatTokenValidation(chatToken, socket, async (decoded) => {
+      try {
+        const { senderId } = decoded;
+
+        const receiver = await User.findById(receiverId);
+        if (!receiver) {
           socket.emit("sendMessageError", {
             success: false,
             statusCode: 400,
-            message: "Token error",
+            message: "Receiver does not exists",
           });
+          console.log("Receiver does not exists");
+          return;
         }
-      } else if (!decoded.sender_id) {
+
+        const newMessage = new ChatMessage({
+          senderId,
+          receiverId,
+          message,
+          is_read: false,
+        });
+
+        console.log("Saving message");
+        console.log(newMessage);
+
+        await newMessage.save();
+
+        const senderConversation = UsersActiveConversationMap[senderId];
+        if (senderConversation && senderConversation.activeConversationId) {
+          sockio
+            .to(senderConversation.activeConversationId)
+            .emit("receivedChatMessage", newMessage);
+        } else {
+          // Kinda sus that the sender isn't in a conversation but still sending messages but idk it can be an automated messaging system or smth
+          const conversationId = makeConvesationId(senderId, receiverId);
+          sockio.to(conversationId).emit("receivedChatMessage", newMessage);
+        }
+      } catch (e) {
         socket.emit("sendMessageError", {
           success: false,
-          statusCode: 400,
-          message: "Faulty token (missing sender_id)",
+          statusCode: 500,
+          message: "Server error",
         });
-      } else {
-        try {
-          const { sender_id } = decoded;
-          const sender = await ChatMessage.findById(sender_id);
-          if (!sender) {
-            socket.emit("sendMessageError", {
-              success: false,
-              statusCode: 400,
-              message: "Sender does not exists",
-            });
-            return;
-          }
-
-          const receiver = await ChatMessage.findById(receiver_id);
-          if (!receiver) {
-            socket.emit("sendMessageError", {
-              success: false,
-              statusCode: 400,
-              message: "Receiver does not exists",
-            });
-            return;
-          }
-
-          const newMessage = new ChatMessage({
-            sender_id,
-            receiver_id,
-            message,
-            is_read: false,
-          });
-
-          await newMessage.save();
-
-          const senderSocketId = UsersConnectionList[sender_id];
-          if (senderSocketId) {
-            sockio.to(senderSocketId).emit("receivedChatMessage", message);
-          } else {
-            // Kinda sus that sender's not connected to socket but still sending stuffs but idk it can be an automated messaging system or smth
-          }
-
-          const receiverSocketId = UsersConnectionList[receiver_id];
-          if (receiverSocketId) {
-            sockio.to(receiverSocketId).emit("receivedChatMessage", message);
-          }
-        } catch (e) {
-          socket.emit("sendMessageError", {
-            success: false,
-            statusCode: 500,
-            message: "Server error",
-          });
-        }
       }
     });
   });

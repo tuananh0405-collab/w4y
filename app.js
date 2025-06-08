@@ -2,7 +2,8 @@ import express from "express";
 import { JWT_SECRET, PORT } from "./config/env.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import sockio from "socket.io";
+import { Server } from "socket.io";
+import http from "http";
 
 import authRouter from "./routes/auth.routes.js";
 import userRouter from "./routes/user.routes.js";
@@ -17,6 +18,8 @@ import errorMiddleware from "./middlewares/error.middleware.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { setOnSendChatMessage } from "./events/onSendChatMessage.js";
+import { setOnSetActiveConversation } from "./events/onSetActiveConversation.js";
+import chatRouter from "./routes/chat.routes.js";
 
 // Thêm đoạn này để lấy __dirname trong ES module
 const __filename = fileURLToPath(import.meta.url);
@@ -39,6 +42,7 @@ app.use("/api/v1/job", jobRouter);
 app.use("/api/v1/application", applicationRouter);
 app.use("/api/v1/payment", paymentRouter);
 app.use("/api/v1/review", reviewRouter);
+app.use("/api/v1/chat", chatRouter);
 app.use(errorMiddleware);
 
 app.get("/", (req, res) => {
@@ -47,33 +51,44 @@ app.get("/", (req, res) => {
 
 // === Socket stuffs ===
 const httpServer = http.createServer(app);
-const sock = sockio(httpServer, {
-  cors: corsOptions,
-  // transports: ["websocket", "polling"],
+const sockio = new Server(httpServer, {
+  cors: {
+    origin: "http://localhost:3001",
+    methods: ["GET", "POST", "PUT"],
+    credentials: true,
+  },
 });
 
-const UsersConnectionList = []; // Global list of connected sockets' id =v
+const UsersActiveConversationMap = [];
+/* List of users and their conversation in memory
+  {
+     socketId: user's websocket id (mostly for socket-based identification)
+     activeConversationId: id of the conversation on user's screen
+  }
+  */
 
-sock.on("connection", (socket) => {
+sockio.on("connection", (socket) => {
   socket.emit("welcome", "init-ing"); // debug
 
-  // setOnConnectToChat
+  console.log("Socket connected:", socket.id);
 
-
-  setOnSendChatMessage(sockio, socket, UsersConnectionList);
+  setOnSetActiveConversation(socket, UsersActiveConversationMap);
+  setOnSendChatMessage(sockio, socket, UsersActiveConversationMap);
 
   socket.on("disconnect", () => {
-    // console.log("An user disconnected");
-    UsersConnectionList.filter((urs) => urs.socket === socket).forEach(
-      (urs) => {
-        // console.log(`Removed user ${urs.userId} from room ${urs.roomId}`);
-        UsersConnectionList.splice(UsersConnectionList.indexOf(urs), 1);
-      },
-    );
+    // Removes user's entry from the active conversation list
+    for (const [userId, conversation] of Object.entries(
+      UsersActiveConversationMap,
+    )) {
+      if (conversation.socketId === socket.id) {
+        delete UsersActiveConversationMap[userId];
+        break;
+      }
+    }
   });
 });
 
-app.listen(PORT, async () => {
+httpServer.listen(PORT, async () => {
   console.log(`listening on http://localhost:${PORT}`);
 
   await connectToDatabase();
