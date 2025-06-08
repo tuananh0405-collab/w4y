@@ -16,6 +16,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  avatarUrl: {
+    type: String, // Thêm trường ảnh đại diện
+    default: ""
+  },
   accountType: {
     type: String,
     enum: ['Nhà tuyển dụng', 'Ứng viên'],
