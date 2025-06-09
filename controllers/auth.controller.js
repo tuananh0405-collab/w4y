@@ -170,6 +170,7 @@ export const signIn = async (req, res, next) => {
         name: user.name,
         email: user.email,
         accountType: user.accountType,
+        points: user.points,
       },
     });
   } catch (error) {

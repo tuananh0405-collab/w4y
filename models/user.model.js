@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ['Nhà tuyển dụng', 'Ứng viên'],
+    enum: ['Nhà Tuyển Dụng', 'Ứng viên'],
     required: true,
   },
   googleId: {
@@ -30,6 +30,12 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
   },
+  points: {
+  type: Number,
+  default: 0, // mặc định 0 điểm
+  min: 0
+},
+
   createdAt: {
     type: Date,
     default: Date.now,

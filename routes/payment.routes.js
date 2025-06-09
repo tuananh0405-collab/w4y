@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { checkoutPayment, viewPaymentHistory } from "../controllers/payment.controller.js";
+import { checkoutPayment, syncPointsFromGoogleSheet, viewPaymentHistory } from "../controllers/payment.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 import { ACCOUNT_NAME, ACCOUNT_NO, BANK_ID, TEMPLATE } from "../config/env.js";
 
@@ -7,6 +7,7 @@ const paymentRouter = Router()
 
 paymentRouter.post('/checkout', checkoutPayment)
 paymentRouter.get("/history/:userId", viewPaymentHistory)
+paymentRouter.get("/sync-vietqr",authenticate, syncPointsFromGoogleSheet); // GET: /api/payment/sync-vietqr
 
 // Endpoint tạo VietQR
 paymentRouter.post("/create-vietqr", async (req, res) => {
