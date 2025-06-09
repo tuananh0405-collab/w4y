@@ -5,6 +5,42 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { generateEmailTemplate } from "../utils/email-template.js";
 import ApplicantProfile from "../models/applicantProfile.model.js";
+import cloudinary from '../config/cloudinary.js';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import multer from 'multer';
+import path from 'path';
+
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params:{
+    resource_type: 'raw',
+    public_id: (req, file) => {
+      const ext = path.extname(file.originalname);
+      const baseName = path.parse(file.originalname).name;
+      // Sanitize tên file để chỉ chứa ký tự an toàn
+      const safeName = baseName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+      return `${req.user._id}-${safeName}-${Date.now()}${ext}`;
+    },
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpg|jpeg|png/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (mimetype && extname) {
+    return cb(null, true);
+  } else {
+    cb(new Error("Only JPG, JPEG, and PNG files are allowed!"));
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }  // Giới hạn kích thước image tối đa (5MB)
+});
 
 export const getUser = async (req, res, next) => {
   try {
@@ -12,7 +48,7 @@ export const getUser = async (req, res, next) => {
     const userId = req.user._id;
 
     // Tìm user lấy thông tin cơ bản
-    const user = await User.findById(userId).select('name email phone');
+    const user = await User.findById(userId).select('name email phone avatarUrl');
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -30,6 +66,7 @@ export const getUser = async (req, res, next) => {
         education: profile?.education || '',
         jobTitle: profile?.jobTitle || '',
         resumeFiles: profile?.resumeFiles || [],
+        avatarUrl: user.avatarUrl || '',
       },
     });
   } catch (error) {
@@ -172,3 +209,40 @@ export const updateUserProfile = async (req, res, next) => {
     next(error);
   }
 };
+
+export const uploadAvatar = [
+  upload.single('avatar'),  // Đảm bảo rằng tên trường trong form-data là 'avatar'
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No file uploaded" });
+      }
+      const userId = req.user._id;
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Nếu user đã có avatarUrl, xóa ảnh cũ trên Cloudinary
+      if (user.avatarUrl) {
+        const urlParts = user.avatarUrl.split('/').pop();
+        // Xóa ảnh cũ
+        await cloudinary.uploader.destroy(urlParts, { resource_type: 'raw' });
+      }
+      if (!req.file.path) {
+        return res.status(400).json({ success: false, message: "File upload failed" });
+      }
+      // Cập nhật URL ảnh đại diện mới
+      user.avatarUrl = req.file.path;
+
+      await user.save();
+
+      res.status(200).json({
+        success: true,
+        data: { avatarUrl: user.avatarUrl },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+];

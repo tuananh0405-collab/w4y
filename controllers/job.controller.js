@@ -142,7 +142,7 @@ export const viewJobList = async (req, res, next) => {
         const employer = await User.findById(job.employerId).select("name");  // Lấy tên nhà tuyển dụng
         return {
         id:job._id,
-          employerName: employer.name,
+          employerName: employer?.name,
           title: job.title,
           description: job.description,
           requirements: job.requirements,
