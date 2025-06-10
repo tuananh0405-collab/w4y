@@ -3,7 +3,9 @@ import { config } from "dotenv";
 config({ path: `.env.${process.env.NODE_ENV || "development"}.local` });
 
 export const {
-  PORT, FE_URL,
+  PORT,
+  FE_URL,
+  BE_URL,
   NODE_ENV,
   DB_URI,
   JWT_SECRET,
@@ -21,6 +23,9 @@ export const {
   VNP_API_URL,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
-  BANK_ID, ACCOUNT_NO, TEMPLATE, ACCOUNT_NAME,
-  GOOGLE_SCRIPT_VIETQR_URL
+  BANK_ID,
+  ACCOUNT_NO,
+  TEMPLATE,
+  ACCOUNT_NAME,
+  GOOGLE_SCRIPT_VIETQR_URL,
 } = process.env;

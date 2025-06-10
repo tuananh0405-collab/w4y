@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { FE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from "./env.js";
+import { BE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from "./env.js";
 import User from "../models/user.model.js";
 
 passport.use(
@@ -8,7 +8,7 @@ passport.use(
     {
       clientID: GOOGLE_CLIENT_ID,
       clientSecret: GOOGLE_CLIENT_SECRET,
-      callbackURL: `${FE_URL}/api/v1/auth/google/callback`,
+      callbackURL: `${BE_URL}/api/v1/auth/google/callback`,
       passReqToCallback: true, // Enable access to request object
     },
     async (req, accessToken, refreshToken, profile, done) => {
