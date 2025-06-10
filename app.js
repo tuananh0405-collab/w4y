@@ -1,5 +1,5 @@
 import express from "express";
-import { JWT_SECRET, PORT } from "./config/env.js";
+import {  FE_URL, JWT_SECRET, PORT } from "./config/env.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 
@@ -26,7 +26,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({ 
-  origin: "http://localhost:3001", 
+  origin: FE_URL, 
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

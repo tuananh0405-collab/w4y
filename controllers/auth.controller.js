@@ -5,6 +5,7 @@ import crypto from "crypto";
 import transporter from "../config/nodemailer.js";
 import {
   EMAIL_ACCOUNT,
+  FE_URL,
   JWT_EXPIRES_IN,
   JWT_SECRET,
   NODE_ENV,
@@ -316,12 +317,12 @@ export const googleCallback = (req, res, next) => {
           email: user.email,
           accountType: user.accountType,
         },
-        redirectUrl: 'http://localhost:3001'
+        redirectUrl:FE_URL
       };
 
       // Send response with redirect URL and user data
       res.redirect(
-        `http://localhost:3001/auth/google/callback?user=${encodeURIComponent(
+        `${FE_URL}}/auth/google/callback?user=${encodeURIComponent(
           JSON.stringify(userData)
         )}`
       );
