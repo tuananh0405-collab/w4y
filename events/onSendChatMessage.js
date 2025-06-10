@@ -20,7 +20,6 @@ export const setOnSendChatMessage = (
             statusCode: 400,
             message: "Receiver does not exists",
           });
-          console.log("Receiver does not exists");
           return;
         }
 
@@ -30,9 +29,6 @@ export const setOnSendChatMessage = (
           message,
           is_read: false,
         });
-
-        console.log("Saving message");
-        console.log(newMessage);
 
         await newMessage.save();
 
