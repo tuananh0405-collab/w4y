@@ -1,0 +1,30 @@
+name: Deploy App
+
+on:
+  push:
+    branches:
+      - production
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        working-directory: /home/deployed/WDP/w4y
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Pull latest changes
+        run: git pull
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build app
+        run: npm run build
+
+      - name: Restart with PM2
+        run: pm2 restart w4u-be || pm2 start npm --name w4u-be -- run dev
