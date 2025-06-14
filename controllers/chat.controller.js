@@ -67,8 +67,11 @@ export const getChatHistory = async (req, res, next) => {
 export const getRecentMessagedUsers = async (req, res, next) => {
   try {
     // const senderId = req.user._id;
-    let { senderId } = req.query;
+    let { senderId, query } = req.query;
     senderId = toObjectId(senderId);
+
+    // Sanitize query and turn it into a case insensitive regex
+    query = new RegExp(query.toString().replace(/[^a-zA-Z\d_ ]/g, ""), "i");
 
     const results = await ChatMessage.aggregate([
       {
@@ -111,6 +114,14 @@ export const getRecentMessagedUsers = async (req, res, next) => {
       },
       {
         $unwind: "$partner",
+      },
+      {
+        $match: {
+          $or: [
+            { "partner.name": { $regex: query } },
+            { "partner.email": { $regex: query } },
+          ],
+        },
       },
       {
         $project: {
@@ -240,9 +251,6 @@ export const getApplicantsGroupedByApplications = async (req, res, next) => {
     // Map put fetched jobs in a map to search by id later, could have been an array.filter but idk
     const jobMap = new Map(activeJobs.map((job) => [job._id.toString(), job]));
     const jobIds = [...jobMap.keys()];
-
-    console.log("Your map, sir");
-    console.log(jobMap);
 
     // Get recent applications for those jobs
     const applications = await Application.find({ jobId: { $in: jobIds } })
