@@ -3,8 +3,15 @@ import User from "../models/user.model.js";
 import generateToken from "../utils/generateToken.js";
 import crypto from "crypto";
 import transporter from "../config/nodemailer.js";
-import { EMAIL_ACCOUNT, JWT_EXPIRES_IN, JWT_SECRET, NODE_ENV } from "../config/env.js";
+import {
+  EMAIL_ACCOUNT,
+  FE_URL,
+  JWT_EXPIRES_IN,
+  JWT_SECRET,
+  NODE_ENV,
+} from "../config/env.js";
 import jwt from "jsonwebtoken";
+import passport from "../config/passport.js";
 
 // Đăng ký người dùng
 // export const signUp = async (req, res, next) => {
@@ -24,7 +31,7 @@ import jwt from "jsonwebtoken";
 //     const newUser = new User({
 //       name,
 //       email,
-//       password, 
+//       password,
 //       accountType,
 //     });
 
@@ -56,7 +63,17 @@ import jwt from "jsonwebtoken";
 
 export const signUp = async (req, res, next) => {
   try {
-    const { name, email, password, accountType, gender, phone, company, city, district } = req.body;
+    const {
+      name,
+      email,
+      password,
+      accountType,
+      gender,
+      phone,
+      company,
+      city,
+      district,
+    } = req.body;
 
     // Kiểm tra người dùng đã tồn tại chưa
     const existingUser = await User.findOne({ email });
@@ -85,7 +102,10 @@ export const signUp = async (req, res, next) => {
     newUser.password = await bcrypt.hash(password, salt);
 
     // Tạo mã xác minh
-    const verificationCode = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const verificationCode = crypto
+      .randomBytes(3)
+      .toString("hex")
+      .toUpperCase();
     newUser.verificationCode = verificationCode;
 
     // Lưu người dùng mới vào cơ sở dữ liệu
@@ -103,7 +123,8 @@ export const signUp = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Verification code sent to your email. Please verify your email before logging in.",
+      message:
+        "Verification code sent to your email. Please verify your email before logging in.",
     });
   } catch (error) {
     next(error);
@@ -150,6 +171,7 @@ export const signIn = async (req, res, next) => {
         name: user.name,
         email: user.email,
         accountType: user.accountType,
+        points: user.points,
       },
     });
   } catch (error) {
@@ -186,16 +208,22 @@ export const verifyEmail = async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     // Kiểm tra mã xác minh
     if (user.isVerified) {
-      return res.status(400).json({ success: false, message: "Email already verified" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email already verified" });
     }
 
     if (user.verificationCode !== verificationCode) {
-      return res.status(400).json({ success: false, message: "Invalid verification code" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid verification code" });
     }
 
     // Mã hóa lại mật khẩu và xác minh email
@@ -239,7 +267,7 @@ export const refreshToken = async (req, res, next) => {
       httpOnly: true,
       secure: NODE_ENV !== "development",
       sameSite: "strict",
-      maxAge: 24*60*60*1000,
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.status(200).json({
@@ -250,4 +278,56 @@ export const refreshToken = async (req, res, next) => {
     console.error(err);
     return res.status(401).json({ message: "Invalid refresh token" });
   }
+};
+
+// Google Authentication Routes
+export const googleAuth = (req, res, next) => {
+  const accountType = req.query.accountType;
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    state: accountType, // Pass account type in state parameter
+  })(req, res, next);
+};
+
+export const googleCallback = (req, res, next) => {
+  passport.authenticate("google", { failureRedirect: "/auth" }, async (err, user) => {
+    try {
+      if (err) {
+        const error = new Error(err.message);
+        error.statusCode = 500;
+        throw error;
+      }
+
+      if (!user) {
+        const error = new Error("Google authentication failed");
+        error.statusCode = 401;
+        throw error;
+      }
+
+      // Generate JWT tokens
+      generateToken(res, user._id);
+
+      // Create user object with required structure to match normal login
+      const userData = {
+        success: true,
+        message: "Google authentication successful",
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          accountType: user.accountType,
+        },
+        redirectUrl:FE_URL
+      };
+
+      // Send response with redirect URL and user data
+      res.redirect(
+        `${FE_URL}}/auth/google/callback?user=${encodeURIComponent(
+          JSON.stringify(userData)
+        )}`
+      );
+    } catch (error) {
+      next(error);
+    }
+  })(req, res, next);
 };

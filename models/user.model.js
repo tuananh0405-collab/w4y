@@ -16,11 +16,26 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  avatarUrl: {
+    type: String, // Thêm trường ảnh đại diện
+    default: ""
+  },
   accountType: {
     type: String,
-    enum: ['Nhà Tuyển Dụng', 'Ứng Viên'],
+    enum: ['Nhà Tuyển Dụng', 'Ứng viên'],
     required: true,
   },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  points: {
+  type: Number,
+  default: 0, // mặc định 0 điểm
+  min: 0
+},
+
   createdAt: {
     type: Date,
     default: Date.now,

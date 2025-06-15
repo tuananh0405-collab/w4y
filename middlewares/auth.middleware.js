@@ -18,8 +18,11 @@ const authenticate = async (req, res, next) => {
       throw new Error("Unauthorized - token invalid");
     }
   } else {
-    res.status(401);
-    throw new Error("Unauthorized - no token");
+    // res.status(401);
+    // throw new Error("Unauthorized - no token");
+    console.log('====================================');
+    console.log('Unauthorized - no token');
+    console.log('====================================');
   }
 }
 
