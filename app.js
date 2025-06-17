@@ -1,5 +1,5 @@
 import express from "express";
-import {  FE_URL, JWT_SECRET, PORT } from "./config/env.js";
+import { FE_URL, JWT_SECRET, PORT } from "./config/env.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { Server } from "socket.io";
@@ -30,12 +30,14 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(cors({ 
-  origin: FE_URL, 
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(
+  cors({
+    origin: FE_URL,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
 // Thêm serve static để phục vụ thư mục uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -58,7 +60,7 @@ app.get("/", (req, res) => {
 const httpServer = http.createServer(app);
 const sockio = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:3001",
+    origin: FE_URL,
     methods: ["GET", "POST", "PUT"],
     credentials: true,
   },
