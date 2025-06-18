@@ -45,7 +45,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/user", userRouter);
 app.use("/api/v1/applicant", applicantRouter);
-app.use("/api/v1/job", jobRouter);
+app.use("/api/v1/jobs", jobRouter);
 app.use("/api/v1/application", applicationRouter);
 app.use("/api/v1/payment", paymentRouter);
 app.use("/api/v1/review", reviewRouter);
