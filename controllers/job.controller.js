@@ -301,3 +301,68 @@ export const getJobsByEmployer = async (req, res, next) => {
     next(error);
   }
 };
+
+export const createJobs = async (req, res, next) => {
+  try {
+    const jobs = req.body.jobs;  // Dữ liệu là một mảng các công việc
+
+    // Lặp qua mảng công việc và tạo từng công việc mới
+    const jobPromises = jobs.map(async (job) => {
+      const { 
+        title, 
+        description, 
+        requirements, 
+        salary, 
+        deliveryTime, 
+        priorityLevel,
+        quantity, 
+        level,
+        industry, 
+        position, 
+        location, 
+        experience, 
+        deadline
+      } = job;
+
+      const employerId = req.user._id;
+
+      // Kiểm tra xem công việc có tồn tại không
+      const existingJob = await Job.findOne({ title, employerId });
+
+      if (existingJob) {
+        throw new Error(`Job titled "${title}" already posted.`);
+      }
+
+      // Tạo công việc mới
+      const newJob = new Job({
+        employerId,
+        title,
+        description,
+        requirements,
+        salary,
+        deliveryTime,
+        priorityLevel,
+        quantity,     
+        level,        
+        industry,     
+        position,     
+        location,     
+        experience,   
+        deadline
+      });
+
+      await newJob.save();
+    });
+
+    // Chờ tất cả các job được tạo xong
+    await Promise.all(jobPromises);
+
+    res.status(201).json({
+      success: true,
+      message: "Jobs posted successfully",
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};

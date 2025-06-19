@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createJobPosting,
+  createJobs,
   deleteJob,
   getFilterOptions,
   getJobsByEmployer,
@@ -12,6 +13,7 @@ import { authenticate } from "../middlewares/auth.middleware.js";
 const jobRouter = Router();
 
 jobRouter.post("/create", authenticate, createJobPosting);
+jobRouter.post("/create-jobs", authenticate, createJobs);
 jobRouter.get("/list", viewJobList);
 jobRouter.get("/get-by-employer/:employerId", getJobsByEmployer);
 jobRouter.get("/get-filter-options", getFilterOptions);
