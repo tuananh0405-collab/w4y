@@ -4,7 +4,7 @@ import Application from "../models/application.model.js";
 import ApplicantProfile from "../models/applicantProfile.model.js";
 
 /**
- * POST /api/jobs
+ * POST /api/v1/job
  * Create a new job post
  * Allowed Roles: Recruiter (Nhà Tuyển Dụng)
  */
@@ -103,7 +103,7 @@ export const createJobPosting = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs
+ * GET /api/v1/job
  * Get a list of job posts with filtering
  * Allowed Roles: All
  */
@@ -195,17 +195,17 @@ export const viewJobList = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs/:id
+ * GET /api/v1/job/:id
  * Get detailed information about a specific job
  * Allowed Roles: All
  */
 export const viewJobDetail = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
 
     // Find job and increment view count
     const job = await Job.findByIdAndUpdate(
-      jobId,
+      id,
       { $inc: { views: 1 } },
       { new: true }
     );
@@ -260,13 +260,13 @@ export const viewJobDetail = async (req, res, next) => {
 };
 
 /**
- * PUT /api/jobs/:id
+ * PUT /api/v1/job/:id
  * Update an existing job post
  * Allowed Roles: Recruiter (owner of the job)
  */
 export const updateJob = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
     const { 
       title, 
       description, 
@@ -286,7 +286,7 @@ export const updateJob = async (req, res, next) => {
     } = req.body;
 
     // Find job
-    const job = await Job.findById(jobId);
+    const job = await Job.findById(id);
 
     if (!job) {
       return res.status(404).json({ 
@@ -323,7 +323,7 @@ export const updateJob = async (req, res, next) => {
     };
 
     const updatedJob = await Job.findByIdAndUpdate(
-      jobId,
+      id,
       updateFields,
       { new: true }
     );
@@ -339,16 +339,16 @@ export const updateJob = async (req, res, next) => {
 };
 
 /**
- * DELETE /api/jobs/:id
+ * DELETE /api/v1/job/:id
  * Delete a job post (permanent delete)
  * Allowed Roles: Recruiter (owner of the job)
  */
 export const deleteJob = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
 
     // Find job
-    const job = await Job.findById(jobId);
+    const job = await Job.findById(id);
 
     if (!job) {
       return res.status(404).json({ 
@@ -366,7 +366,7 @@ export const deleteJob = async (req, res, next) => {
     }
 
     // Delete the job
-    await Job.findByIdAndDelete(jobId);
+    await Job.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
@@ -378,16 +378,16 @@ export const deleteJob = async (req, res, next) => {
 };
 
 /**
- * PUT /api/jobs/:id/hide
+ * PUT /api/v1/job/:id/hide
  * Temporarily hide a job from public view
  * Allowed Roles: Recruiter (owner of the job)
  */
 export const hideJob = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
 
     // Find job
-    const job = await Job.findById(jobId);
+    const job = await Job.findById(id);
 
     if (!job) {
       return res.status(404).json({ 
@@ -422,13 +422,13 @@ export const hideJob = async (req, res, next) => {
 };
 
 /**
- * PATCH /api/jobs/:id/status
+ * PATCH /api/v1/job/:id/status
  * Change the status of a job
  * Allowed Roles: Admin
  */
 export const updateJobStatus = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
     const { status } = req.body;
 
     // Check if user is admin (you might need to add admin role to user model)
@@ -450,7 +450,7 @@ export const updateJobStatus = async (req, res, next) => {
 
     // Find and update job
     const job = await Job.findByIdAndUpdate(
-      jobId,
+      id,
       { status },
       { new: true }
     );
@@ -476,7 +476,7 @@ export const updateJobStatus = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs/overview
+ * GET /api/v1/job/overview
  * Get an overview of job posts
  * Allowed Roles: Admin
  */
@@ -554,7 +554,7 @@ export const getJobOverview = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs/recruiter/:recruiterId
+ * GET /api/v1/job/recruiter/:recruiterId
  * Get all jobs posted by a specific recruiter
  * Allowed Roles: Admin, Recruiter (if viewing own jobs)
  */
@@ -619,17 +619,17 @@ export const getJobsByRecruiter = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs/:jobId/applicants
+ * GET /api/v1/job/:id/applicants
  * View the list of applicants who applied for a specific job
  * Allowed Roles: Recruiter (owner of the job)
  */
 export const getJobApplicants = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
     // Find job
-    const job = await Job.findById(jobId);
+    const job = await Job.findById(id);
 
     if (!job) {
       return res.status(404).json({ 
@@ -650,14 +650,14 @@ export const getJobApplicants = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     // Get applications for this job
-    const applications = await Application.find({ jobId })
+    const applications = await Application.find({ id })
       .populate('applicantId', 'name email phone')
       .sort({ appliedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     // Get total count
-    const totalApplications = await Application.countDocuments({ jobId });
+    const totalApplications = await Application.countDocuments({ id });
 
     res.status(200).json({
       success: true,
@@ -692,17 +692,17 @@ export const getJobApplicants = async (req, res, next) => {
 };
 
 /**
- * PATCH /api/jobs/:jobId/applications/:applicantId
+ * PATCH /api/v1/job/:id/applications/:applicantId
  * Update the application status of an applicant
  * Allowed Roles: Recruiter (owner of the job)
  */
 export const updateApplicationStatus = async (req, res, next) => {
   try {
-    const { jobId, applicantId } = req.params;
+    const { id, applicantId } = req.params;
     const { status } = req.body;
 
     // Find job
-    const job = await Job.findById(jobId);
+    const job = await Job.findById(id);
 
     if (!job) {
       return res.status(404).json({ 
@@ -730,7 +730,7 @@ export const updateApplicationStatus = async (req, res, next) => {
 
     // Find and update application
     const application = await Application.findOneAndUpdate(
-      { jobId, applicantId },
+      { id, applicantId },
       { status },
       { new: true }
     ).populate('applicantId', 'name email');
@@ -759,17 +759,17 @@ export const updateApplicationStatus = async (req, res, next) => {
 };
 
 /**
- * POST /api/jobs/:jobId/view
+ * POST /api/v1/job/:id/view
  * Track the number of views for a job post
  * Allowed Roles: All (but typically called by frontend)
  */
 export const trackJobView = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
 
     // Increment view count
     const job = await Job.findByIdAndUpdate(
-      jobId,
+      id,
       { $inc: { views: 1 } },
       { new: true }
     );
@@ -795,7 +795,7 @@ export const trackJobView = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs/recommended
+ * GET /api/v1/job/recommended
  * Get AI-recommended jobs for the logged-in applicant
  * Allowed Roles: Applicant
  */
@@ -876,7 +876,7 @@ export const getRecommendedJobs = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs/expired
+ * GET /api/v1/job/expired
  * View expired job posts
  * Allowed Roles: Recruiter, Admin
  */
@@ -936,17 +936,17 @@ export const getExpiredJobs = async (req, res, next) => {
 };
 
 /**
- * GET /api/jobs/related/:jobId
+ * GET /api/v1/job/related/:id
  * Fetch similar or related jobs based on a specific job
  * Allowed Roles: All
  */
 export const getRelatedJobs = async (req, res, next) => {
   try {
-    const { jobId } = req.params;
+    const { id } = req.params;
     const { limit = 5 } = req.query;
 
     // Find the reference job
-    const referenceJob = await Job.findById(jobId);
+    const referenceJob = await Job.findById(id);
 
     if (!referenceJob) {
       return res.status(404).json({ 
@@ -957,7 +957,7 @@ export const getRelatedJobs = async (req, res, next) => {
 
     // Build query for related jobs
     const relatedQuery = {
-      _id: { $ne: jobId }, // Exclude the reference job
+      _id: { $ne: id }, // Exclude the reference job
       status: 'active',
       isHidden: false,
       $or: [
@@ -1018,6 +1018,8 @@ export const getRelatedJobs = async (req, res, next) => {
     next(error);
   }
 };
+
+// ================================================================
 
 // Existing functions (keeping for backward compatibility)
 export const getFilterOptions = async (req, res, next) => {

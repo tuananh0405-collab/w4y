@@ -4,7 +4,7 @@ This document describes all the job-related API endpoints implemented in the W4Y
 
 ## Base URL
 ```
-http://localhost:3000/api/v1/jobs
+http://localhost:3000/api/v1/job
 ```
 
 ## Authentication
@@ -12,8 +12,8 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 
 ## Role-Based Access Control
 - **Recruiter (Nhà Tuyển Dụng)**: Can create, update, delete, and manage their own job posts
-- **Applicant (Ứng Viên)**: Can view jobs, apply, and get recommendations
-- **Admin**: Can manage all jobs and view analytics
+- **Applicant (Ứng Viên)**: Can view job, apply, and get recommendations
+- **Admin**: Can manage all job and view analytics
 - **All**: Can view public job listings
 
 ---
@@ -21,7 +21,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ## 📋 Basic CRUD Operations
 
 ### 1. Create Job Post
-**POST** `/api/v1/jobs`
+**POST** `/api/v1/job`
 
 **Purpose**: Create a new job post
 
@@ -45,6 +45,23 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
   "deadline": "2024-12-31",
   "keywords": ["react", "typescript", "frontend"],
   "skills": ["React", "TypeScript", "JavaScript", "HTML", "CSS"]
+},
+{
+  "title": "Intern Backend Developer",
+  "description": "We are looking for backend developer...",
+  "requirements": "NodeJS, no experience required",
+  "salary": "50 - 100 USD",
+  "deliveryTime": "Full-time",
+  "priorityLevel": "Nổi bật",
+  "quantity": 2,
+  "level": "Intern",
+  "industry": "Technology",
+  "position": "Backend Developer",
+  "location": "Ho Chi Minh City",
+  "experience": "No experience required",
+  "deadline": "2025-12-31",
+  "keywords": ["nodejs", "typescript", "backend"],
+  "skills": ["NodeJS", "TypeScript", "JavaScript"]
 }
 ```
 
@@ -72,11 +89,11 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
     "status": "active",
     "createdAt": "2024-01-01T00:00:00.000Z"
   }
-}
+},
 ```
 
 ### 2. Get Job List
-**GET** `/api/v1/jobs`
+**GET** `/api/v1/job`
 
 **Purpose**: Get a list of job posts with filtering
 
@@ -93,7 +110,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 - `page` (number): Page number (default: 1)
 - `limit` (number): Items per page (default: 10)
 
-**Example**: `GET /api/v1/jobs?location=Ho Chi Minh City&skills=React,TypeScript&page=1&limit=10`
+**Example**: `GET /api/v1/job?location=Ho Chi Minh City&skills=React,TypeScript&page=1&limit=10`
 
 **Response**:
 ```json
@@ -123,7 +140,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
   "pagination": {
     "currentPage": 1,
     "totalPages": 5,
-    "totalJobs": 50,
+    "totalJob": 50,
     "hasNextPage": true,
     "hasPrevPage": false
   }
@@ -131,7 +148,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```
 
 ### 3. Get Job Detail
-**GET** `/api/v1/jobs/:id`
+**GET** `/api/v1/job/:id`
 
 **Purpose**: Get detailed information about a specific job
 
@@ -169,7 +186,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```
 
 ### 4. Update Job
-**PUT** `/api/v1/jobs/:id`
+**PUT** `/api/v1/job/:id`
 
 **Purpose**: Update an existing job post
 
@@ -189,7 +206,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```
 
 ### 5. Delete Job
-**DELETE** `/api/v1/jobs/:id`
+**DELETE** `/api/v1/job/:id`
 
 **Purpose**: Delete a job post (permanent delete)
 
@@ -208,7 +225,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ## 🔧 Job Management
 
 ### 6. Hide/Unhide Job
-**PUT** `/api/v1/jobs/:id/hide`
+**PUT** `/api/v1/job/:id/hide`
 
 **Purpose**: Temporarily hide a job from public view
 
@@ -227,7 +244,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```
 
 ### 7. Update Job Status
-**PATCH** `/api/v1/jobs/:id/status`
+**PATCH** `/api/v1/job/:id/status`
 
 **Purpose**: Change the status of a job
 
@@ -253,7 +270,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```
 
 ### 8. Track Job View
-**POST** `/api/v1/jobs/:id/view`
+**POST** `/api/v1/job/:id/view`
 
 **Purpose**: Track the number of views for a job post
 
@@ -276,7 +293,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ## 📊 Analytics and Overview
 
 ### 9. Get Job Overview
-**GET** `/api/v1/jobs/overview`
+**GET** `/api/v1/job/overview`
 
 **Purpose**: Get an overview of job posts
 
@@ -293,20 +310,20 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
   "message": "Job overview fetched successfully",
   "data": {
     "statistics": {
-      "totalJobs": 100,
-      "activeJobs": 80,
-      "pendingJobs": 15,
-      "hiddenJobs": 5
+      "totalJob": 100,
+      "activeJob": 80,
+      "pendingJob": 15,
+      "hiddenJob": 5
     },
-    "jobsByIndustry": [
+    "jobByIndustry": [
       { "_id": "Technology", "count": 45 },
       { "_id": "Finance", "count": 25 }
     ],
-    "jobsByStatus": [
+    "jobByStatus": [
       { "_id": "active", "count": 80 },
       { "_id": "pending", "count": 15 }
     ],
-    "recentJobs": [
+    "recentJob": [
       {
         "id": "job_id",
         "title": "Senior Frontend Developer",
@@ -320,7 +337,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```
 
 ### 10. Get Filter Options
-**GET** `/api/v1/jobs/filter-options`
+**GET** `/api/v1/job/filter-options`
 
 **Purpose**: Get filter options for job search
 
@@ -344,12 +361,12 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 
 ## 👥 Recruiter Specific
 
-### 11. Get Jobs by Recruiter
-**GET** `/api/v1/jobs/recruiter/:recruiterId`
+### 11. Get Job by Recruiter
+**GET** `/api/v1/job/recruiter/:recruiterId`
 
-**Purpose**: Get all jobs posted by a specific recruiter
+**Purpose**: Get all job posted by a specific recruiter
 
-**Allowed Roles**: Admin, Recruiter (if viewing own jobs)
+**Allowed Roles**: Admin, Recruiter (if viewing own job)
 
 **Query Parameters**:
 - `page` (number): Page number (default: 1)
@@ -359,14 +376,14 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```json
 {
   "success": true,
-  "message": "Jobs fetched successfully",
+  "message": "Job fetched successfully",
   "data": {
     "recruiter": {
       "id": "recruiter_id",
       "name": "Recruiter Name",
       "email": "recruiter@company.com"
     },
-    "jobs": [
+    "job": [
       {
         "id": "job_id",
         "title": "Senior Frontend Developer",
@@ -380,7 +397,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
     "pagination": {
       "currentPage": 1,
       "totalPages": 3,
-      "totalJobs": 25,
+      "totalJob": 25,
       "hasNextPage": true,
       "hasPrevPage": false
     }
@@ -393,7 +410,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ## 📝 Application Management
 
 ### 12. Get Job Applicants
-**GET** `/api/v1/jobs/:jobId/applicants`
+**GET** `/api/v1/job/:jobId/applicants`
 
 **Purpose**: View the list of applicants who applied for a specific job
 
@@ -440,7 +457,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```
 
 ### 13. Update Application Status
-**PATCH** `/api/v1/jobs/:jobId/applications/:applicantId`
+**PATCH** `/api/v1/job/:jobId/applications/:applicantId`
 
 **Purpose**: Update the application status of an applicant
 
@@ -472,10 +489,10 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 
 ## 🎯 Special Features
 
-### 14. Get Recommended Jobs
-**GET** `/api/v1/jobs/recommended`
+### 14. Get Recommended Job
+**GET** `/api/v1/job/recommended`
 
-**Purpose**: Get AI-recommended jobs for the logged-in applicant
+**Purpose**: Get AI-recommended job for the logged-in applicant
 
 **Allowed Roles**: Applicant
 
@@ -483,7 +500,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```json
 {
   "success": true,
-  "message": "Recommended jobs fetched successfully",
+  "message": "Recommended job fetched successfully",
   "data": [
     {
       "id": "job_id",
@@ -504,8 +521,8 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 }
 ```
 
-### 15. Get Expired Jobs
-**GET** `/api/v1/jobs/expired`
+### 15. Get Expired Job
+**GET** `/api/v1/job/expired`
 
 **Purpose**: View expired job posts
 
@@ -519,9 +536,9 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 ```json
 {
   "success": true,
-  "message": "Expired jobs fetched successfully",
+  "message": "Expired job fetched successfully",
   "data": {
-    "jobs": [
+    "job": [
       {
         "id": "job_id",
         "title": "Senior Frontend Developer",
@@ -534,7 +551,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
     "pagination": {
       "currentPage": 1,
       "totalPages": 2,
-      "totalExpiredJobs": 15,
+      "totalExpiredJob": 15,
       "hasNextPage": true,
       "hasPrevPage": false
     }
@@ -542,21 +559,21 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
 }
 ```
 
-### 16. Get Related Jobs
-**GET** `/api/v1/jobs/related/:jobId`
+### 16. Get Related Job
+**GET** `/api/v1/job/related/:jobId`
 
-**Purpose**: Fetch similar or related jobs based on a specific job
+**Purpose**: Fetch similar or related job based on a specific job
 
 **Allowed Roles**: All
 
 **Query Parameters**:
-- `limit` (number): Number of related jobs to return (default: 5)
+- `limit` (number): Number of related job to return (default: 5)
 
 **Response**:
 ```json
 {
   "success": true,
-  "message": "Related jobs fetched successfully",
+  "message": "Related job fetched successfully",
   "data": {
     "referenceJob": {
       "id": "job_id",
@@ -565,7 +582,7 @@ Most endpoints require authentication using JWT tokens. Include the token in coo
       "position": "Frontend Developer",
       "location": "Ho Chi Minh City"
     },
-    "relatedJobs": [
+    "relatedJob": [
       {
         "id": "related_job_id",
         "employerName": "Another Company",
