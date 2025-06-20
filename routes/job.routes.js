@@ -71,6 +71,13 @@ jobRouter.get("/recommended", authenticate, getRecommendedJobs);
 jobRouter.get("/expired", authenticate, getExpiredJobs);
 
 /**
+ * GET /api/v1/job/filter-options
+ * Get filter options for job search
+ * Allowed Roles: All
+ */
+jobRouter.get("/filter-options", getFilterOptions);
+
+/**
  * GET /api/v1/job/:id
  * Get detailed information about a specific job
  * Allowed Roles: All
@@ -113,13 +120,6 @@ jobRouter.patch("/:id/status", authenticate, updateJobStatus);
  * Allowed Roles: All (but typically called by frontend)
  */
 jobRouter.post("/:id/view", trackJobView);
-
-/**
- * GET /api/v1/job/filter-options
- * Get filter options for job search
- * Allowed Roles: All
- */
-jobRouter.get("/filter-options", getFilterOptions);
 
 // ===== RECRUITER SPECIFIC =====
 
