@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { countApplicationsByApplicant, getProfile, searchApplicants, uploadCV, getUploadedCVs, deleteUploadedCV, createProject, getMyProjects, updateProject, deleteProject } from "../controllers/applicant.controller.js";
+import { countApplicationsByApplicant, getProfile, searchApplicants, uploadCV, getUploadedCVs, deleteUploadedCV } from "../controllers/applicant.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
 const applicantRouter = Router()
@@ -12,9 +12,6 @@ applicantRouter.get('/count', authenticate, countApplicationsByApplicant);
 
 applicantRouter.get('/search', authenticate, searchApplicants);
 
-applicantRouter.post("/projects", authenticate, createProject);
-applicantRouter.get("/projects", authenticate, getMyProjects);
-applicantRouter.put("/projects/:projectId", authenticate, updateProject);
-applicantRouter.delete("/projects/:projectId", authenticate, deleteProject);
+
 
 export default applicantRouter;
