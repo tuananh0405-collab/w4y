@@ -28,4 +28,5 @@ export const {
   TEMPLATE,
   ACCOUNT_NAME,
   GOOGLE_SCRIPT_VIETQR_URL,
+  CONVERT_SECRET,
 } = process.env;
