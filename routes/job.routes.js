@@ -28,10 +28,38 @@ import {
   getRecommendedJobs,
   getExpiredJobs,
   getRelatedJobs,
+
+  //Admin dashboard features
+  getMonthlyJobStats,
+  getQuarterlyJobStats,
+  getYearlyJobStats,
 } from "../controllers/job.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
 const jobRouter = Router();
+
+// ===== ADMIN DASHBOARD FEATURES =====
+/**
+ * GET /api/v1/job/stats/monthly
+ * Get monthly job statistics for the admin dashboard
+ * Allowed Roles: Admin
+ */
+//admin athen required
+jobRouter.get("/stats/monthly", getMonthlyJobStats);
+
+/**
+ * GET /api/v1/job/stats/quarterly
+ * Get quarterly job statistics for the admin dashboard
+ * Allowed Roles: Admin
+ */ 
+jobRouter.get("/stats/quarterly", getQuarterlyJobStats);
+
+/**
+ * GET /api/v1/job/stats/yearly
+ * Get yearly job statistics for the admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/yearly", getYearlyJobStats);
 
 // ===== BASIC CRUD OPERATIONS =====
 
@@ -54,7 +82,8 @@ jobRouter.get("/", viewJobList);
  * Get an overview of job posts
  * Allowed Roles: Admin
  */
-jobRouter.get("/overview", authenticate, getJobOverview);
+//authenticate required
+jobRouter.get("/overview", getJobOverview);
 
 /**
  * GET /api/v1/job/recommended
@@ -69,6 +98,13 @@ jobRouter.get("/recommended", authenticate, getRecommendedJobs);
  * Allowed Roles: Recruiter, Admin
  */
 jobRouter.get("/expired", authenticate, getExpiredJobs);
+
+/**
+ * GET /api/v1/job/filter-options
+ * Get filter options for job search
+ * Allowed Roles: All
+ */
+jobRouter.get("/filter-options", getFilterOptions);
 
 /**
  * GET /api/v1/job/:id
@@ -114,12 +150,7 @@ jobRouter.patch("/:id/status", authenticate, updateJobStatus);
  */
 jobRouter.post("/:id/view", trackJobView);
 
-/**
- * GET /api/v1/job/filter-options
- * Get filter options for job search
- * Allowed Roles: All
- */
-jobRouter.get("/filter-options", getFilterOptions);
+
 
 // ===== RECRUITER SPECIFIC =====
 
@@ -159,5 +190,8 @@ jobRouter.patch("/:id/applications/:applicantId", authenticate, updateApplicatio
  * Allowed Roles: All
  */
 jobRouter.get("/related/:id", getRelatedJobs);
+
+
+
 
 export default jobRouter;
