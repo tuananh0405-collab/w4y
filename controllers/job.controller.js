@@ -1031,6 +1031,8 @@ export const getJobsByEmployer = async (req, res, next) => {
   }
 };
 
+
+
 export const getMonthlyJobStats = async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();

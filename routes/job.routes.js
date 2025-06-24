@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   // Basic CRUD operations
   createJobPosting,
+
   viewJobList,
   viewJobDetail,
   updateJob,
@@ -38,6 +39,13 @@ import { authenticate } from "../middlewares/auth.middleware.js";
 
 const jobRouter = Router();
 
+jobRouter.post("/create", authenticate, createJobPosting);
+jobRouter.get("/list", viewJobList);
+jobRouter.get("/get-by-employer/:employerId", getJobsByEmployer);
+jobRouter.get("/get-filter-options", getFilterOptions);
+jobRouter.get("/detail/:jobId", viewJobDetail);
+jobRouter.put("/update/:jobId", authenticate, updateJob);
+jobRouter.delete("/delete/:jobId", authenticate, deleteJob);
 // ===== ADMIN DASHBOARD FEATURES =====
 /**
  * GET /api/v1/job/stats/monthly
