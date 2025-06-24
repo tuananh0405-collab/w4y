@@ -6,6 +6,7 @@ import User from '../models/user.model.js';
 import cloudinary from '../config/cloudinary.js';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { console } from 'inspector';
+import Project from '../models/project.model.js';
 
 
 const storage = new CloudinaryStorage({
@@ -226,6 +227,101 @@ export const searchApplicants = async (req, res, next) => {
       message: 'Danh sách ứng viên được tìm thấy.',
       data: applicants,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Tạo mới một project
+export const createProject = async (req, res, next) => {
+  try {
+    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+
+    if (!applicantProfile) {
+      return res.status(404).json({ success: false, message: "Applicant profile not found" });
+    }
+
+    const newProject = new Project({
+      ...req.body,
+      applicantId: applicantProfile._id,
+    });
+
+    await newProject.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Project created successfully",
+      data: newProject,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Lấy tất cả project của applicant hiện tại
+export const getMyProjects = async (req, res, next) => {
+  try {
+    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+    if (!applicantProfile) {
+      return res.status(404).json({ success: false, message: "Applicant profile not found" });
+    }
+
+    const projects = await Project.find({ applicantId: applicantProfile._id });
+    res.status(200).json({
+      success: true,
+      message: "Fetched user projects successfully",
+      data: projects,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Cập nhật project
+export const updateProject = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+
+    const project = await Project.findById(projectId);
+
+    if (!project) {
+      return res.status(404).json({ success: false, message: "Project not found" });
+    }
+
+    // Kiểm tra quyền sở hữu
+    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+    if (!applicantProfile || !project.applicantId.equals(applicantProfile._id)) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    Object.assign(project, req.body);
+    await project.save();
+
+    res.status(200).json({ success: true, message: "Project updated", data: project });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Xoá project
+export const deleteProject = async (req, res, next) => {
+  try {
+    const { projectId } = req.params;
+
+    const project = await Project.findById(projectId);
+
+    if (!project) {
+      return res.status(404).json({ success: false, message: "Project not found" });
+    }
+
+    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+    if (!applicantProfile || !project.applicantId.equals(applicantProfile._id)) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    await project.deleteOne();
+
+    res.status(200).json({ success: true, message: "Project deleted" });
   } catch (error) {
     next(error);
   }
