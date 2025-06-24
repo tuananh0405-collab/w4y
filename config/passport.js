@@ -40,7 +40,7 @@ passport.use(
           name: profile.displayName,
           email: profile.emails[0].value,
           password: Math.random().toString(36).slice(-8), // Generate random password
-          accountType: accountType || 'Ứng viên', // Use state parameter or default to Candidate
+          accountType: accountType || 'Ứng Viên', // Use state parameter or default to Candidate
           googleId: profile.id,
           isVerified: true, // Google accounts are pre-verified
         });

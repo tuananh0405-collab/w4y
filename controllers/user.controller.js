@@ -246,3 +246,164 @@ export const uploadAvatar = [
     }
   },
 ];
+
+export const getTotalUserCount = async (req, res) => {
+  try {
+    const applicantCount = await User.countDocuments({ accountType: "Ứng Viên" });
+    const recruiterCount = await User.countDocuments({ accountType: "Nhà Tuyển Dụng" });
+
+    const total = applicantCount + recruiterCount;
+
+    res.json({ total });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getUserRoleCounts = async (req, res) => {
+  try {
+    const applicant = await User.countDocuments({ accountType: "Ứng Viên" });
+    const recruiter = await User.countDocuments({ accountType: "Nhà Tuyển Dụng" });
+    res.json({ applicant, recruiter });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getMonthlyUserGrowth = async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+
+    const startDate = new Date(`${year}-01-01`);
+    const endDate = new Date(`${year + 1}-01-01`);
+
+    const stats = await User.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lt: endDate },
+          accountType: { $in: ["Ứng Viên", "Nhà Tuyển Dụng"] },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            month: { $month: "$createdAt" },
+            role: "$accountType",
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Initialize 12 months
+    const monthlyData = {
+      applicant: Array(12).fill(0),
+      recruiter: Array(12).fill(0),
+    };
+
+    stats.forEach(({ _id, count }) => {
+      const { month, role } = _id;
+      const index = month - 1;
+      if (role === "Ứng Viên") monthlyData.applicant[index] = count;
+      else if (role === "Nhà Tuyển Dụng") monthlyData.recruiter[index] = count;
+    });
+
+    res.json({ year, data: monthlyData });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch monthly user growth", error: err.message });
+  }
+};
+
+export const getQuarterlyUserGrowth = async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const startDate = new Date(`${year}-01-01`);
+    const endDate = new Date(`${year + 1}-01-01`);
+
+    const stats = await User.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lt: endDate },
+          accountType: { $in: ["Ứng Viên", "Nhà Tuyển Dụng"] },
+        },
+      },
+      {
+        $addFields: {
+          quarter: { $ceil: { $divide: [{ $month: "$createdAt" }, 3] } },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            quarter: "$quarter",
+            role: "$accountType",
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const quarterlyData = {
+      applicant: Array(4).fill(0),
+      recruiter: Array(4).fill(0),
+    };
+
+    stats.forEach(({ _id, count }) => {
+      const { quarter, role } = _id;
+      const index = quarter - 1;
+      if (role === "Ứng Viên") quarterlyData.applicant[index] = count;
+      else if (role === "Nhà Tuyển Dụng") quarterlyData.recruiter[index] = count;
+    });
+
+    res.json({ year, data: quarterlyData });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch quarterly user growth", error: err.message });
+  }
+};
+
+export const getYearlyUserGrowth = async (req, res) => {
+  try {
+    const endYear = parseInt(req.query.endYear) || new Date().getFullYear();
+    const startYear = endYear - 3;
+
+    const startDate = new Date(`${startYear}-01-01`);
+    const endDate = new Date(`${endYear + 1}-01-01`);
+
+    const stats = await User.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lt: endDate },
+          accountType: { $in: ["Ứng Viên", "Nhà Tuyển Dụng"] },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            role: "$accountType",
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const yearlyData = {
+      applicant: Array(4).fill(0),
+      recruiter: Array(4).fill(0),
+    };
+
+    stats.forEach(({ _id, count }) => {
+      const { year, role } = _id;
+      const index = year - startYear;
+      if (role === "Ứng Viên") yearlyData.applicant[index] = count;
+      else if (role === "Nhà Tuyển Dụng") yearlyData.recruiter[index] = count;
+    });
+
+    res.json({ years: [startYear, startYear + 1, startYear + 2, endYear], data: yearlyData });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch yearly user growth", error: err.message });
+  }
+};
+
