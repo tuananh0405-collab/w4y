@@ -233,9 +233,11 @@ export const searchApplicants = async (req, res, next) => {
 };
 
 // Tạo mới một project
-export const createProject = async (req, res, next) => {
-  try {
-    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+export const createProject = [
+  // upload.array('mediaFiles'), // Sử dụng multer để upload nhiều file
+  async (req, res, next) => {
+    try {
+      const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
 
     if (!applicantProfile) {
       return res.status(404).json({ success: false, message: "Applicant profile not found" });
@@ -256,7 +258,7 @@ export const createProject = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+}];
 
 // Lấy tất cả project của applicant hiện tại
 export const getMyProjects = async (req, res, next) => {
