@@ -179,6 +179,60 @@ export const signIn = async (req, res, next) => {
   }
 };
 
+// Đăng nhập admin
+export const signInAdmin = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    // Tìm người dùng theo email
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      const error = new Error("User not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Kiểm tra mật khẩu
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      const error = new Error("Invalid password");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    // Kiểm tra xem email đã được xác minh chưa
+    if (!user.isVerified) {
+      const error = new Error("Email not verified");
+      error.statusCode = 403;
+      throw error;
+    }
+
+    if (user.accountType !== "Admin") {
+      const error = new Error("You are not authorized to access this");
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Tạo JWT Token
+    generateToken(res, user._id);
+    res.status(200).json({
+      success: true,
+      message: "User signed in successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        accountType: user.accountType,
+        points: user.points,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Đăng xuất người dùng
 export const signOut = async (req, res, next) => {
   try {

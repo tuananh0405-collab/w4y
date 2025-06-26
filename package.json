@@ -5,7 +5,10 @@
   "main": "app.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "start": "node app.js",
+    "test": "cross-env NODE_ENV=test jest --testTimeout=5000",
+    "test:watch": "cross-env NODE_ENV=test jest --watchAll"
   },
   "keywords": [],
   "author": "",
@@ -26,8 +29,14 @@
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^6.10.0",
     "nodemon": "^3.1.9",
-    "socket.io": "^4.8.1",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0"
+    "passport-google-oauth20": "^2.0.0",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/supertest": "^6.0.3",
+    "cross-env": "^7.0.3",
+    "jest": "^30.0.2",
+    "supertest": "^7.1.1"
   }
 }
