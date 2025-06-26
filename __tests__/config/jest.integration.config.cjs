@@ -5,7 +5,7 @@ module.exports = {
   transform: { "^.+\\.m?[jt]sx?$": "babel-jest" },
   testEnvironment: "node",
   transformIgnorePatterns: [],
-  testTimeout: 100000,
+  testTimeout: 50000,
   globals: {
     "ts-jest": {
       isolatedModules: true,

@@ -5,7 +5,7 @@ module.exports = {
   setupFilesAfterEnv: ["<rootDir>/__tests__/config/setup.e2e.mjs"],
   transform: { "^.+\\.m?[jt]sx?$": "babel-jest" },
   testEnvironment: "node",
-  testTimeout: 100000,
+  testTimeout: 50000,
   transformIgnorePatterns: [],
   globals: {
     "ts-jest": {

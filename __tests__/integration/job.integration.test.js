@@ -4,20 +4,6 @@ import mongoose from "mongoose";
 import app from "../../app.js";
 import { testingApp } from "../config/setup.integration.mjs";
 
-// jest.unstable_mockModule("../../middlewares/auth.middleware.js", () => ({
-//   authenticate: (req, res, next) => {
-//     req.user = { _id: mockUserId };
-//     next();
-//   },
-// }));
-
-jest.mock("../../middlewares/auth.middleware.js", () => ({
-  authenticate: (req, res, next) => {
-    req.user = { _id: mockUserId };
-    next();
-  },
-}));
-
 describe("Job API Integration", () => {
   let createdJobId;
 
@@ -43,6 +29,7 @@ describe("Job API Integration", () => {
       location: "Hanoi",
       experience: "3 years",
       deadline: new Date(),
+      createdBy: mockUserId
     };
     const res = await request(testingApp)
       .post("/api/v1/job/create")
