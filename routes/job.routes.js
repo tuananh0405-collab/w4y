@@ -158,8 +158,6 @@ jobRouter.patch("/:id/status", authenticate, updateJobStatus);
  */
 jobRouter.post("/:id/view", trackJobView);
 
-
-
 // ===== RECRUITER SPECIFIC =====
 
 /**

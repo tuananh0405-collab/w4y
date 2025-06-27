@@ -1,5 +1,5 @@
 import express from "express";
-import { FE_URL, JWT_SECRET, PORT } from "./config/env.js";
+import { FE_URL, JWT_SECRET, NODE_ENV, PORT } from "./config/env.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { Server } from "socket.io";
@@ -12,6 +12,7 @@ import jobRouter from "./routes/job.routes.js";
 import applicationRouter from "./routes/application.routes.js";
 import paymentRouter from "./routes/payment.routes.js";
 import reviewRouter from "./routes/review.routes.js";
+import mediaRouter from "./routes/applicant-media-s3.routes.js"
 import connectToDatabase from "./database/mongodb.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 
@@ -36,7 +37,7 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  }),
+  })
 );
 
 // Thêm serve static để phục vụ thư mục uploads
@@ -50,6 +51,7 @@ app.use("/api/v1/application", applicationRouter);
 app.use("/api/v1/payment", paymentRouter);
 app.use("/api/v1/review", reviewRouter);
 app.use("/api/v1/chat", chatRouter);
+app.use("/api/v1/media", mediaRouter)
 app.use(errorMiddleware);
 
 app.get("/", (req, res) => {
@@ -85,7 +87,7 @@ sockio.on("connection", (socket) => {
   socket.on("disconnect", () => {
     // Removes user's entry from the active conversation list
     for (const [userId, conversation] of Object.entries(
-      UsersActiveConversationMap,
+      UsersActiveConversationMap
     )) {
       if (conversation.socketId === socket.id) {
         delete UsersActiveConversationMap[userId];
@@ -98,7 +100,9 @@ sockio.on("connection", (socket) => {
 httpServer.listen(PORT, async () => {
   console.log(`listening on http://localhost:${PORT}`);
 
-  await connectToDatabase();
+  if (NODE_ENV !== "test") {
+    await connectToDatabase();
+  }
 });
 
 export default app;
