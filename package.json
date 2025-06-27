@@ -6,7 +6,11 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon app.js",
-    "start": "node app.js"
+    "start": "node app.js",
+    "test:unit": "jest --config=__tests__/config/jest.unit.config.cjs --detectOpenHandles --runInBand --forceExit",
+    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules PORT=3004 jest --config=__tests__/config/jest.integration.config.cjs --detectOpenHandles --runInBand --forceExit",
+    "test:e2e": "cross-env NODE_OPTIONS=--experimental-vm-modules PORT=3005 jest --config=__tests__/config/jest.e2e.config.cjs --detectOpenHandles --runInBand --forceExit",
+    "test": "npm-run-all --parallel test:unit test:integration test:e2e"
   },
   "keywords": [],
   "author": "",
@@ -32,5 +36,17 @@
     "passport-google-oauth20": "^2.0.0",
     "socket.io": "^4.8.1",
     "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.27.2",
+    "@types/supertest": "^6.0.3",
+    "babel-jest": "^30.0.2",
+    "cross-env": "^7.0.3",
+    "jest": "^30.0.3",
+    "jest-puppeteer": "^11.0.0",
+    "mongodb-memory-server": "^10.1.4",
+    "npm-run-all": "^4.1.5",
+    "puppeteer": "^24.10.2",
+    "supertest": "^7.1.1"
   }
 }
