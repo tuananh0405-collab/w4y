@@ -7,7 +7,10 @@ import cloudinary from '../config/cloudinary.js';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { console } from 'inspector';
 import Project from '../models/project.model.js';
+import connectS3 from "../config/aws-s3.js";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 
+const s3Client = connectS3();
 
 const storage = new CloudinaryStorage({
   cloudinary,
@@ -269,6 +272,7 @@ export const getMyProjects = async (req, res, next) => {
     }
 
     const projects = await Project.find({ applicantId: applicantProfile._id });
+    console.log(applicantProfile._id);
     res.status(200).json({
       success: true,
       message: "Fetched user projects successfully",
@@ -314,6 +318,13 @@ export const deleteProject = async (req, res, next) => {
 
     if (!project) {
       return res.status(404).json({ success: false, message: "Project not found" });
+    }
+
+    for (const media of project.media) {
+      const key = media.url.split("amazonaws.com/")[1];
+      if (key) {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: "career-shift", Key: key }));
+      }
     }
 
     const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
