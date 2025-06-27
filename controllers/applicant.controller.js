@@ -11,6 +11,10 @@ import convertApi from "../config/convertdocx.js";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
 import Project from '../models/project.model.js';
+import connectS3 from "../config/aws-s3.js";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+
+const s3Client = connectS3();
 
 const storage = new CloudinaryStorage({
   cloudinary,
@@ -305,9 +309,11 @@ export const searchApplicants = async (req, res, next) => {
 };
 
 // Tạo mới một project
-export const createProject = async (req, res, next) => {
-  try {
-    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+export const createProject = [
+  // upload.array('mediaFiles'), // Sử dụng multer để upload nhiều file
+  async (req, res, next) => {
+    try {
+      const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
 
     if (!applicantProfile) {
       return res.status(404).json({ success: false, message: "Applicant profile not found" });
@@ -328,7 +334,7 @@ export const createProject = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+}];
 
 // Lấy tất cả project của applicant hiện tại
 export const getMyProjects = async (req, res, next) => {
@@ -339,6 +345,7 @@ export const getMyProjects = async (req, res, next) => {
     }
 
     const projects = await Project.find({ applicantId: applicantProfile._id });
+    console.log(applicantProfile._id);
     res.status(200).json({
       success: true,
       message: "Fetched user projects successfully",
@@ -384,6 +391,13 @@ export const deleteProject = async (req, res, next) => {
 
     if (!project) {
       return res.status(404).json({ success: false, message: "Project not found" });
+    }
+
+    for (const media of project.media) {
+      const key = media.url.split("amazonaws.com/")[1];
+      if (key) {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: "career-shift", Key: key }));
+      }
     }
 
     const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });

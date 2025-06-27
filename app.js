@@ -12,6 +12,7 @@ import jobRouter from "./routes/job.routes.js";
 import applicationRouter from "./routes/application.routes.js";
 import paymentRouter from "./routes/payment.routes.js";
 import reviewRouter from "./routes/review.routes.js";
+import mediaRouter from "./routes/applicant-media-s3.routes.js"
 import connectToDatabase from "./database/mongodb.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 
@@ -50,6 +51,7 @@ app.use("/api/v1/application", applicationRouter);
 app.use("/api/v1/payment", paymentRouter);
 app.use("/api/v1/review", reviewRouter);
 app.use("/api/v1/chat", chatRouter);
+app.use("/api/v1/media", mediaRouter)
 app.use(errorMiddleware);
 
 app.get("/", (req, res) => {
