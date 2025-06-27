@@ -482,50 +482,15 @@ export const updateJobStatus = async (req, res, next) => {
  */
 export const getJobOverview = async (req, res, next) => {
   try {
-    // Check if user is admin
-    if (req.user.accountType !== 'Admin') {
-      return res.status(403).json({
-        success: false,
-        message: "Only admins can view job overview"
-      });
-    }
 
     const { startDate, endDate } = req.query;
 
-    // Build date filter
-    const dateFilter = {};
-    if (startDate && endDate) {
-      dateFilter.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    }
 
     // Get job statistics
-    const totalJobs = await Job.countDocuments(dateFilter);
-    const activeJobs = await Job.countDocuments({ ...dateFilter, status: 'active' });
-    const pendingJobs = await Job.countDocuments({ ...dateFilter, status: 'pending' });
-    const hiddenJobs = await Job.countDocuments({ ...dateFilter, isHidden: true });
-
-    // Get jobs by industry
-    const jobsByIndustry = await Job.aggregate([
-      { $match: dateFilter },
-      { $group: { _id: '$industry', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]);
-
-    // Get jobs by status
-    const jobsByStatus = await Job.aggregate([
-      { $match: dateFilter },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]);
-
-    // Get recent jobs
-    const recentJobs = await Job.find(dateFilter)
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate('employerId', 'name');
+    const totalJobs = await Job.countDocuments();
+    const activeJobs = await Job.countDocuments({status: 'active' });
+    const pendingJobs = await Job.countDocuments({status: 'pending' });
+    const hiddenJobs = await Job.countDocuments({isHidden: true });
 
     res.status(200).json({
       success: true,
@@ -537,15 +502,6 @@ export const getJobOverview = async (req, res, next) => {
           pendingJobs,
           hiddenJobs
         },
-        jobsByIndustry,
-        jobsByStatus,
-        recentJobs: recentJobs.map(job => ({
-          id: job._id,
-          title: job.title,
-          employerName: job.employerId.name,
-          status: job.status,
-          createdAt: job.createdAt
-        }))
       }
     });
   } catch (error) {
@@ -1072,5 +1028,171 @@ export const getJobsByEmployer = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+
+
+export const getMonthlyJobStats = async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+
+    if (!year || isNaN(year)) {
+      return res.status(400).json({ message: "Invalid year provided" });
+    }
+
+    const startDate = new Date(`${year}-01-01`);
+    const endDate = new Date(`${year + 1}-01-01`);
+
+    const stats = await Job.aggregate([
+      {
+        $match: {
+          createdAt: {
+            $gte: startDate,
+            $lt: endDate,
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          month: "$_id",
+          count: 1,
+          _id: 0,
+        },
+      },
+    ]);
+
+    // Fill missing months with 0
+    const monthlyData = Array(12).fill(0);
+    stats.forEach(({ month, count }) => {
+      monthlyData[month - 1] = count;
+    });
+
+    res.json({
+      year,
+      data: monthlyData,
+    });
+  } catch (err) {
+    console.error("Error fetching monthly stats:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getQuarterlyJobStats = async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const startDate = new Date(year, 0, 1);   // Jan 1
+    const endDate = new Date(year + 1, 0, 1); // Jan 1 next year
+
+    const stats = await Job.aggregate([
+      {
+        $match: {
+          createdAt: {
+            $gte: startDate,
+            $lt: endDate,
+          },
+        },
+      },
+      {
+        $addFields: {
+          month: { $month: "$createdAt" },
+        },
+      },
+      {
+        $addFields: {
+          quarter: {
+            $switch: {
+              branches: [
+                { case: { $lte: ["$month", 3] }, then: 1 },
+                { case: { $lte: ["$month", 6] }, then: 2 },
+                { case: { $lte: ["$month", 9] }, then: 3 },
+              ],
+              default: 4,
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$quarter",
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          quarter: "$_id",
+          count: 1,
+          _id: 0,
+        },
+      },
+    ]);
+
+    const result = [0, 0, 0, 0]; // Initialize Q1–Q4 = 0
+
+    stats.forEach(({ quarter, count }) => {
+      result[quarter - 1] = count;
+    });
+
+    res.json({ year, data: result });
+  } catch (err) {
+    console.error("Error fetching quarterly stats:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getYearlyJobStats = async (req, res) => {
+  try {
+    const endYear = parseInt(req.query.endYear) || new Date().getFullYear();
+    const startYear = endYear - 3;
+
+    // Calculate start and end dates for filtering
+    const startDate = new Date(`${startYear}-01-01T00:00:00Z`);
+    const endDate = new Date(`${endYear + 1}-01-01T00:00:00Z`);
+
+    const stats = await Job.aggregate([
+      {
+        $match: {
+          createdAt: {
+            $gte: startDate,
+            $lt: endDate,
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $year: "$createdAt" },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          year: "$_id",
+          count: 1,
+          _id: 0,
+        },
+      },
+    ]);
+
+    // Prepare the result with fallback 0
+    const counts = [];
+    for (let y = startYear; y <= endYear; y++) {
+      const stat = stats.find((s) => s.year === y);
+      counts.push(stat ? stat.count : 0);
+    }
+
+    res.json({
+      startYear,
+      endYear,
+      data: counts,
+    });
+  } catch (error) {
+    console.error("Error getting yearly job stats:", error);
+    res.status(500).json({ message: "Failed to fetch yearly job stats" });
   }
 };

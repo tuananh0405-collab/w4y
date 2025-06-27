@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   // Basic CRUD operations
   createJobPosting,
+
   viewJobList,
   viewJobDetail,
   updateJob,
@@ -28,10 +29,45 @@ import {
   getRecommendedJobs,
   getExpiredJobs,
   getRelatedJobs,
+
+  //Admin dashboard features
+  getMonthlyJobStats,
+  getQuarterlyJobStats,
+  getYearlyJobStats,
 } from "../controllers/job.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
 const jobRouter = Router();
+
+jobRouter.post("/create", authenticate, createJobPosting);
+jobRouter.get("/list", viewJobList);
+jobRouter.get("/get-by-employer/:employerId", getJobsByEmployer);
+jobRouter.get("/get-filter-options", getFilterOptions);
+jobRouter.get("/detail/:jobId", viewJobDetail);
+jobRouter.put("/update/:jobId", authenticate, updateJob);
+jobRouter.delete("/delete/:jobId", authenticate, deleteJob);
+// ===== ADMIN DASHBOARD FEATURES =====
+/**
+ * GET /api/v1/job/stats/monthly
+ * Get monthly job statistics for the admin dashboard
+ * Allowed Roles: Admin
+ */
+//admin athen required
+jobRouter.get("/stats/monthly", getMonthlyJobStats);
+
+/**
+ * GET /api/v1/job/stats/quarterly
+ * Get quarterly job statistics for the admin dashboard
+ * Allowed Roles: Admin
+ */ 
+jobRouter.get("/stats/quarterly", getQuarterlyJobStats);
+
+/**
+ * GET /api/v1/job/stats/yearly
+ * Get yearly job statistics for the admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/yearly", getYearlyJobStats);
 
 // ===== BASIC CRUD OPERATIONS =====
 
@@ -54,7 +90,8 @@ jobRouter.get("/", viewJobList);
  * Get an overview of job posts
  * Allowed Roles: Admin
  */
-jobRouter.get("/overview", authenticate, getJobOverview);
+//authenticate required
+jobRouter.get("/overview", getJobOverview);
 
 /**
  * GET /api/v1/job/recommended
@@ -159,5 +196,8 @@ jobRouter.patch("/:id/applications/:applicantId", authenticate, updateApplicatio
  * Allowed Roles: All
  */
 jobRouter.get("/related/:id", getRelatedJobs);
+
+
+
 
 export default jobRouter;

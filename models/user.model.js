@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ["Nhà Tuyển Dụng", "Ứng Viên", "Admin"],
+    enum: ['Nhà Tuyển Dụng', 'Ứng Viên'],
     required: true,
   },
   googleId: {
