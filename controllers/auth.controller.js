@@ -376,7 +376,7 @@ export const googleCallback = (req, res, next) => {
 
       // Send response with redirect URL and user data
       res.redirect(
-        `${FE_URL}}/auth/google/callback?user=${encodeURIComponent(
+        `${FE_URL}/auth/google/callback?user=${encodeURIComponent(
           JSON.stringify(userData)
         )}`
       );

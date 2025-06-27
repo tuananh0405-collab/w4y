@@ -20,6 +20,22 @@ const jobSchema = new mongoose.Schema({
     enum: ["Nổi bật", "Thông thường"],
     default: "Thông thường",
   },
+  // New fields for enhanced functionality
+  status: {
+    type: String,
+    enum: ["active", "inactive", "pending", "approved", "rejected", "flagged"],
+    default: "active",
+  },
+  isHidden: {
+    type: Boolean,
+    default: false,
+  },
+  views: {
+    type: Number,
+    default: 0,
+  },
+  keywords: [String], // For search functionality
+  skills: [String], // Required skills for the job
   createdAt: {
     type: Date,
     default: Date.now,
@@ -53,6 +69,13 @@ const jobSchema = new mongoose.Schema({
     // required: true,
   },
 });
+
+// Index for better search performance
+jobSchema.index({ title: 'text', description: 'text', requirements: 'text' });
+jobSchema.index({ status: 1, isHidden: 1 });
+jobSchema.index({ employerId: 1 });
+jobSchema.index({ deadline: 1 });
+
 const Job = mongoose.model("Job", jobSchema);
 
 export default Job;

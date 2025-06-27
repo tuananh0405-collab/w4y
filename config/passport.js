@@ -40,15 +40,15 @@ if (
             return done(null, user);
           }
 
-          // If no user exists, create new user with the account type from state
-          user = await User.create({
-            name: profile.displayName,
-            email: profile.emails[0].value,
-            password: Math.random().toString(36).slice(-8), // Generate random password
-            accountType: accountType || 'Ứng viên', // Use state parameter or default to Candidate
-            googleId: profile.id,
-            isVerified: true, // Google accounts are pre-verified
-          });
+        // If no user exists, create new user with the account type from state
+        user = await User.create({
+          name: profile.displayName,
+          email: profile.emails[0].value,
+          password: Math.random().toString(36).slice(-8), // Generate random password
+          accountType: accountType || 'Ứng Viên', // Use state parameter or default to Candidate
+          googleId: profile.id,
+          isVerified: true, // Google accounts are pre-verified
+        });
 
           return done(null, user);
         } catch (error) {
