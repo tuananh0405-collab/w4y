@@ -291,3 +291,49 @@ export const getApplicantsGroupedByApplications = async (req, res, next) => {
     next(err);
   }
 };
+
+export const markMessagesAsRead = async (req, res, next) => {
+  try {
+    const { messageIds, is_read = true } = req.body;
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "messageIds (array) is required",
+        data: [],
+      });
+    }
+
+    // Validate ObjectIds
+    const validIds = messageIds.filter((id) =>
+      mongoose.Types.ObjectId.isValid(id),
+    );
+    if (validIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid message IDs provided",
+        data: [],
+      });
+    }
+
+    const result = await ChatMessage.updateMany(
+      { _id: { $in: validIds } },
+      { $set: { is_read } },
+    );
+
+    const modifiedMessages = await ChatMessage.find({
+      _id: { $in: validIds },
+      is_read,
+    }).select("_id");
+
+    const modifiedIds = modifiedMessages.map((doc) => doc._id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Updated ${result.modifiedCount} message(s)`,
+      data: { ...result, modifiedIds, is_read },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
