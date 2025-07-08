@@ -6,6 +6,7 @@ import {
   getRecentMessagedUsers,
   getApplicantsGroupedByApplications,
   markMessagesAsRead,
+  getUnreadMessageSenders,
 } from "../controllers/chat.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
@@ -27,5 +28,6 @@ chatRouter.get(
   getApplicantsGroupedByApplications,
 );
 chatRouter.post("/markMessagesAsRead", authenticate, markMessagesAsRead);
+chatRouter.get("/unreadMessageSenders", authenticate, getUnreadMessageSenders);
 
 export default chatRouter;

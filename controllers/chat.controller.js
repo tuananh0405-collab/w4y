@@ -337,3 +337,63 @@ export const markMessagesAsRead = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getUnreadMessageSenders = async (req, res, next) => {
+  try {
+    let { startDate, endDate } = req.query;
+    const userId = req.user._id;
+    const query = {
+      receiverId: userId,
+      is_read: false,
+    };
+    if (startDate || endDate) {
+      query.sentAt = {};
+      if (startDate) query.sentAt.$gte = new Date(startDate);
+      if (endDate) query.sentAt.$lte = new Date(endDate);
+    }
+
+    const results = await ChatMessage.aggregate([
+      { $match: query },
+      {
+        $sort: { sentAt: -1 },
+      },
+      {
+        $group: {
+          _id: "$senderId",
+          unreadCount: { $sum: 1 },
+          latestMessage: { $first: "$message" },
+          latestSentAt: { $first: "$sentAt" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "sender",
+        },
+      },
+      { $unwind: "$sender" },
+      {
+        $project: {
+          _id: 0,
+          senderId: "$sender._id",
+          name: "$sender.name",
+          email: "$sender.email",
+          avatarUrl: "$sender.avatarUrl",
+          unreadCount: 1,
+          latestMessage: 1,
+          latestSentAt: 1,
+        },
+      },
+      { $sort: { latestSentAt: -1 } },
+    ]);
+    return res.status(200).json({
+      success: true,
+      message: `Fetched ${results.length} sender(s) with unread messages`,
+      data: results,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
