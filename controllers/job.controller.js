@@ -2,6 +2,7 @@ import Job from "../models/job.model.js";
 import User from "../models/user.model.js";  // Đảm bảo bạn import User model
 import Application from "../models/application.model.js";
 import ApplicantProfile from "../models/applicantProfile.model.js";
+import { body, param, validationResult } from "express-validator";
 
 /**
  * POST /api/v1/job
@@ -18,39 +19,8 @@ export const createJobPosting = async (req, res, next) => {
       });
     }
 
-    const { 
-      title, 
-      description, 
-      requirements, 
-      salary, 
-      deliveryTime, 
-      priorityLevel,
-      quantity,
-      level,
-      industry,
-      position,
-      location,
-      experience,
-      deadline,
-      keywords,
-      skills
-    } = req.body;
-    
-    const employerId = req.user._id;
-
-    // Check if job with same title already exists for this employer
-    const existingJob = await Job.findOne({ title, employerId });
-
-    if (existingJob) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Job with this title already exists" 
-      });
-    }
-
-    // Create new job
-    const newJob = new Job({
-      employerId,
+    // Use only validated and sanitized input
+    const {
       title,
       description,
       requirements,
@@ -65,14 +35,36 @@ export const createJobPosting = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills,
-      status: "active" // Default status for new jobs
-    });
+      skills
+    } = req.body;
 
+    // Ensure all required text fields are trimmed and string
+    const jobData = {
+      employerId: req.user._id,
+      title: typeof title === 'string' ? title.trim() : '',
+      description: typeof description === 'string' ? description.trim() : '',
+      requirements: typeof requirements === 'string' ? requirements.trim() : '',
+      salary: typeof salary === 'string' ? salary.trim() : '',
+      deliveryTime: typeof deliveryTime === 'string' ? deliveryTime.trim() : deliveryTime,
+      priorityLevel,
+      quantity,
+      level: typeof level === 'string' ? level.trim() : level,
+      industry: typeof industry === 'string' ? industry.trim() : industry,
+      position: typeof position === 'string' ? position.trim() : position,
+      location: typeof location === 'string' ? location.trim() : location,
+      experience: typeof experience === 'string' ? experience.trim() : experience,
+      deadline,
+      keywords,
+      skills,
+      status: "active"
+    };
+
+    // Create new job
+    const newJob = new Job(jobData);
     await newJob.save();
 
     // Get employer information
-    const employer = await User.findById(employerId).select("name");
+    const employer = await User.findById(req.user._id).select("name");
 
     res.status(201).json({
       success: true,
@@ -267,12 +259,12 @@ export const viewJobDetail = async (req, res, next) => {
 export const updateJob = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { 
-      title, 
-      description, 
-      requirements, 
-      salary, 
-      deliveryTime, 
+    const {
+      title,
+      description,
+      requirements,
+      salary,
+      deliveryTime,
       priorityLevel,
       quantity,
       level,
@@ -289,9 +281,9 @@ export const updateJob = async (req, res, next) => {
     const job = await Job.findById(id);
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found"
       });
     }
 
@@ -303,30 +295,24 @@ export const updateJob = async (req, res, next) => {
       });
     }
 
-    // Update job fields
-    const updateFields = {
-      title: title || job.title,
-      description: description || job.description,
-      requirements: requirements || job.requirements,
-      salary: salary || job.salary,
-      deliveryTime: deliveryTime || job.deliveryTime,
-      priorityLevel: priorityLevel || job.priorityLevel,
-      quantity: quantity || job.quantity,
-      level: level || job.level,
-      industry: industry || job.industry,
-      position: position || job.position,
-      location: location || job.location,
-      experience: experience || job.experience,
-      deadline: deadline || job.deadline,
-      keywords: keywords || job.keywords,
-      skills: skills || job.skills
-    };
+    // Update job fields with trimmed and sanitized text
+    if (typeof title === 'string') job.title = title.trim();
+    if (typeof description === 'string') job.description = description.trim();
+    if (typeof requirements === 'string') job.requirements = requirements.trim();
+    if (typeof salary === 'string') job.salary = salary.trim();
+    if (typeof deliveryTime === 'string') job.deliveryTime = deliveryTime.trim();
+    if (priorityLevel !== undefined) job.priorityLevel = priorityLevel;
+    if (quantity !== undefined) job.quantity = quantity;
+    if (typeof level === 'string') job.level = level.trim();
+    if (typeof industry === 'string') job.industry = industry.trim();
+    if (typeof position === 'string') job.position = position.trim();
+    if (typeof location === 'string') job.location = location.trim();
+    if (typeof experience === 'string') job.experience = experience.trim();
+    if (deadline !== undefined) job.deadline = deadline;
+    if (keywords !== undefined) job.keywords = keywords;
+    if (skills !== undefined) job.skills = skills;
 
-    const updatedJob = await Job.findByIdAndUpdate(
-      id,
-      updateFields,
-      { new: true }
-    );
+    const updatedJob = await job.save();
 
     res.status(200).json({
       success: true,
@@ -1196,3 +1182,171 @@ export const getYearlyJobStats = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch yearly job stats" });
   }
 };
+
+// Validation middleware for creating a job
+export const validateCreateJob = [
+  body("title")
+    .trim()
+    .notEmpty().withMessage("Title is required")
+    .isLength({ min: 5, max: 100 }).withMessage("Title must be 5-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Title must be valid and not random characters"),
+  body("description")
+    .trim()
+    .notEmpty().withMessage("Description is required")
+    .isLength({ min: 20, max: 2000 }).withMessage("Description must be 20-2000 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Description must be valid and not random characters"),
+  body("requirements")
+    .trim()
+    .notEmpty().withMessage("Requirements are required")
+    .isLength({ min: 10, max: 1000 }).withMessage("Requirements must be 10-1000 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Requirements must be valid and not random characters"),
+  body("salary")
+    .trim()
+    .notEmpty().withMessage("Salary is required")
+    .isLength({ min: 2, max: 50 }).withMessage("Salary must be 2-50 characters")
+    .matches(/^[0-9]+$/u).withMessage("Salary must be a valid number"),
+  body("deliveryTime")
+    .optional()
+    .isLength({ min: 2, max: 50 }).withMessage("Delivery time must be 2-50 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Delivery time must be valid and not random characters"),
+  body("priorityLevel")
+    .optional()
+    .isIn(["Nổi bật", "Thông thường"]).withMessage("Invalid priority level"),
+  body("quantity")
+    .optional()
+    .isInt({ min: 1, max: 1000 }).withMessage("Quantity must be a positive integer (1-1000)"),
+  body("level")
+    .optional()
+    .isLength({ min: 2, max: 50 }).withMessage("Level must be 2-50 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Level must be valid and not random characters"),
+  body("industry")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Industry must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Industry must be valid and not random characters"),
+  body("position")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Position must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Position must be valid and not random characters"),
+  body("location")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Location must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Location must be valid and not random characters"),
+  body("experience")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Experience must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Experience must be valid and not random characters"),
+  body("deadline")
+    .optional()
+    .isISO8601().withMessage("Deadline must be a valid date"),
+  body("keywords")
+    .optional()
+    .isArray().withMessage("Keywords must be an array"),
+  body("skills")
+    .optional()
+    .isArray().withMessage("Skills must be an array"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Validation middleware for updating a job (fields optional but must be valid if present)
+export const validateUpdateJob = [
+  param("id").isMongoId().withMessage("Invalid job ID"),
+  body("title")
+    .optional()
+    .isLength({ min: 5, max: 100 }).withMessage("Title must be 5-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Title must be valid and not random characters"),
+  body("description")
+    .optional()
+    .isLength({ min: 20, max: 2000 }).withMessage("Description must be 20-2000 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Description must be valid and not random characters"),
+  body("requirements")
+    .optional()
+    .isLength({ min: 10, max: 1000 }).withMessage("Requirements must be 10-1000 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Requirements must be valid and not random characters"),
+  body("salary")
+    .optional()
+    .isLength({ min: 2, max: 50 }).withMessage("Salary must be 2-50 characters")
+    .matches(/^[0-9]+$/u).withMessage("Salary must be a valid number"),
+  body("deliveryTime")
+    .optional()
+    .isLength({ min: 2, max: 50 }).withMessage("Delivery time must be 2-50 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Delivery time must be valid and not random characters"),
+  body("priorityLevel")
+    .optional()
+    .isIn(["Nổi bật", "Thông thường"]).withMessage("Invalid priority level"),
+  body("quantity")
+    .optional()
+    .isInt({ min: 1, max: 1000 }).withMessage("Quantity must be a positive integer (1-1000)"),
+  body("level")
+    .optional()
+    .isLength({ min: 2, max: 50 }).withMessage("Level must be 2-50 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Level must be valid and not random characters"),
+  body("industry")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Industry must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Industry must be valid and not random characters"),
+  body("position")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Position must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Position must be valid and not random characters"),
+  body("location")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Location must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Location must be valid and not random characters"),
+  body("experience")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Experience must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Experience must be valid and not random characters"),
+  body("deadline")
+    .optional()
+    .isISO8601().withMessage("Deadline must be a valid date"),
+  body("keywords")
+    .optional()
+    .isArray().withMessage("Keywords must be an array"),
+  body("skills")
+    .optional()
+    .isArray().withMessage("Skills must be an array"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Validation for updating job status
+export const validateUpdateJobStatus = [
+  param("id").isMongoId().withMessage("Invalid job ID"),
+  body("status")
+    .notEmpty().withMessage("Status is required")
+    .isIn(["active", "inactive", "pending", "approved", "rejected", "flagged"]).withMessage("Invalid status value"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Validation for updating application status
+export const validateUpdateApplicationStatus = [
+  param("id").isMongoId().withMessage("Invalid job ID"),
+  param("applicantId").isMongoId().withMessage("Invalid applicant ID"),
+  body("status")
+    .notEmpty().withMessage("Status is required")
+    .isIn(["Pending", "Phỏng vấn", "Từ chối", "Mới nhận"]).withMessage("Invalid status value"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
