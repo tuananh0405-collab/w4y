@@ -1,7 +1,7 @@
-import jwt from 'jsonwebtoken'
+import jwt from "jsonwebtoken";
 
-import { JWT_SECRET } from '../config/env.js'
-import User from '../models/user.model.js'
+import { JWT_SECRET } from "../config/env.js";
+import User from "../models/user.model.js";
 
 const authenticate = async (req, res, next) => {
   let token;
@@ -18,14 +18,13 @@ const authenticate = async (req, res, next) => {
       throw new Error("Unauthorized - token invalid");
     }
   } else {
-    // res.status(401);
+    res.status(401).json("Unauthorized - no token");
     // throw new Error("Unauthorized - no token");
-    console.log('====================================');
-    console.log('Unauthorized - no token');
-    console.log('====================================');
+    console.log("====================================");
+    console.log("Unauthorized - no token");
+    console.log("====================================");
   }
-}
+};
 
+export { authenticate };
 
-
-export {authenticate}

@@ -6,9 +6,14 @@ import toObjectId from "../utils/toObjectId.js";
 import Application from "../models/application.model.js";
 import Job from "../models/job.model.js";
 
+/**
+ * GET /api/v1/chat/token
+ * Generate a chat token for socket authentication
+ * Allowed Roles: Authenticated users
+ */
 export const getChatToken = (req, res, next) => {
   try {
-    const { senderId } = req.query;
+    const senderId = req.user._id;
 
     const chatToken = jwt.sign({ senderId }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN, // For now
@@ -24,7 +29,12 @@ export const getChatToken = (req, res, next) => {
   }
 };
 
-export const getChatHistory = async (req, res, next) => {
+/**
+ * GET /api/v1/chat/messages
+ * Get a paginated list of messages between two users
+ * Allowed Roles: Authenticated users
+ */
+export const getMessages = async (req, res, next) => {
   try {
     const { senderId, receiverId, page = 1, limit = 20 } = req.query;
     const pageNum = Math.max(1, parseInt(page));
@@ -96,7 +106,12 @@ export const getChatHistory = async (req, res, next) => {
   }
 };
 
-export const getRecentMessagedUsers = async (req, res, next) => {
+/**
+ * GET /api/v1/chat/conversations
+ * Get a list of users that the specific user has messages with
+ * Allowed Roles: Authenticated users
+ */
+export const getConversations = async (req, res, next) => {
   try {
     // const senderId = req.user._id;
     let { senderId, query } = req.query;
@@ -180,7 +195,12 @@ export const getRecentMessagedUsers = async (req, res, next) => {
   }
 };
 
-/* Get a list recruiters whose job the applicant applied
+/**
+ * GET /api/v1/chat/recruiters-by-applications
+ * Get a list of recruiters grouped by applications for a specific applicant
+ * Allowed Roles: Authenticated users
+ */
+/* Return format:
  * [
  *   recruiter: User,
  *   jobs: [{
@@ -245,7 +265,12 @@ export const getRecruitersGroupedByApplications = async (req, res, next) => {
   }
 };
 
-/* Get a list applicants who applied for a job that the recruiter posted
+/**
+ * GET /api/v1/chat/applicants-by-applications
+ * Get a list of applicants grouped by applications for recruiter's active jobs
+ * Allowed Roles: Authenticated users
+ */
+/* Return format:
  * [
  *   recruiter: User,
  *   jobs: [{
@@ -324,6 +349,11 @@ export const getApplicantsGroupedByApplications = async (req, res, next) => {
   }
 };
 
+/**
+ * PATCH /api/v1/chat/mark-read
+ * Mark messages as read by IDs
+ * Allowed Roles: Authenticated users
+ */
 export const markMessagesAsRead = async (req, res, next) => {
   try {
     const { messageIds, is_read = true } = req.body;
@@ -370,7 +400,12 @@ export const markMessagesAsRead = async (req, res, next) => {
   }
 };
 
-export const getUnreadMessageSenders = async (req, res, next) => {
+/**
+ * GET /api/v1/chat/unread-messages-senders
+ * Get a list of users who have sent unread messages to the user
+ * Allowed Roles: Authenticated users
+ */
+export const getUnreadMessagesSenders = async (req, res, next) => {
   try {
     let { startDate, endDate } = req.query;
     const userId = req.user._id;

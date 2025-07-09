@@ -1,33 +1,36 @@
 import { Router } from "express";
 import {
   getRecruitersGroupedByApplications,
-  getChatHistory,
+  getMessages,
   getChatToken,
-  getRecentMessagedUsers,
+  getConversations,
   getApplicantsGroupedByApplications,
   markMessagesAsRead,
-  getUnreadMessageSenders,
+  getUnreadMessagesSenders,
 } from "../controllers/chat.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
 const chatRouter = Router();
 
-// Note: in the backend, id queries (such as "userId" or "senderId") that is a literal string "@" will be replaced by user id from the cookie.
-chatRouter.get("/chatToken", authenticate, getChatToken);
-chatRouter.get("/chatHistory", authenticate, getChatHistory);
-chatRouter.get("/recentMessagedUsers", authenticate, getRecentMessagedUsers);
+chatRouter.get("/token", authenticate, getChatToken);
+chatRouter.get("/messages", authenticate, getMessages);
+chatRouter.get("/conversations", authenticate, getConversations);
 chatRouter.get(
-  "/recruitersGroupedByApplications",
+  "/recruiters-by-applications",
   authenticate,
   getRecruitersGroupedByApplications,
 );
 
 chatRouter.get(
-  "/applicantsGroupedByApplications",
+  "/applicants-by-applications",
   authenticate,
   getApplicantsGroupedByApplications,
 );
-chatRouter.post("/markMessagesAsRead", authenticate, markMessagesAsRead);
-chatRouter.get("/unreadMessageSenders", authenticate, getUnreadMessageSenders);
+chatRouter.patch("/mark-read", authenticate, markMessagesAsRead);
+chatRouter.get(
+  "/unread-messages-senders",
+  authenticate,
+  getUnreadMessagesSenders,
+);
 
 export default chatRouter;

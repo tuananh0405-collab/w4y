@@ -35,7 +35,7 @@ app.use(
   cors({
     origin: FE_URL,
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
@@ -63,7 +63,7 @@ const httpServer = http.createServer(app);
 const sockio = new Server(httpServer, {
   cors: {
     origin: FE_URL,
-    methods: ["GET", "POST", "PUT"],
+    methods: ["GET", "POST", "PUT", "PATCH"],
     credentials: true,
   },
 });
@@ -78,8 +78,7 @@ const UsersActiveConversationMap = [];
 
 sockio.on("connection", (socket) => {
   socket.emit("welcome", "init-ing"); // debug
-
-  console.log("Socket connected:", socket.id);
+  // console.log("Socket connected:", socket.id);
 
   setOnSetActiveConversation(socket, UsersActiveConversationMap);
   setOnSendChatMessage(sockio, socket, UsersActiveConversationMap);
