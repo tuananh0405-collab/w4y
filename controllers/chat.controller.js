@@ -26,38 +26,70 @@ export const getChatToken = (req, res, next) => {
 
 export const getChatHistory = async (req, res, next) => {
   try {
-    const { senderId, receiverId } = req.query;
+    const { senderId, receiverId, page = 1, limit = 20 } = req.query;
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.max(1, parseInt(limit));
 
     if (!senderId) {
       res.status(400).json({
         success: false,
         message: `Missing senderId (${senderId})`,
         data: [],
+        pagination: {
+          currentPage: pageNum,
+          totalPages: 0,
+          totalJobs: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
       });
       return;
     }
 
-    // Not an error because this acts as like a standby mode
     if (!receiverId || receiverId === "null") {
       res.status(200).json({
         success: false,
         message: `Empty list due to missing receiverId (${receiverId})`,
         data: [],
+        pagination: {
+          currentPage: pageNum,
+          totalPages: 0,
+          totalJobs: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
       });
       return;
     }
 
-    const messageList = await ChatMessage.find({
+    const chatQuery = {
       $or: [
         { senderId: senderId, receiverId: receiverId },
         { receiverId: senderId, senderId: receiverId },
       ],
-    }).sort({ sentAt: -1 });
+    };
+
+    const totalJobs = await ChatMessage.countDocuments(chatQuery);
+    const totalPages = Math.ceil(totalJobs / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    const messageList = await ChatMessage.find(chatQuery)
+      .sort({ sentAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
 
     res.status(200).json({
       success: true,
-      message: `Fetched message list by ${senderId} and ${receiverId} (${messageList.length})`,
+      message: `Fetched message list between ${senderId} and ${receiverId} (${messageList.length})`,
       data: messageList,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalJobs,
+        hasNextPage,
+        hasPrevPage,
+      },
     });
   } catch (error) {
     next(error);
