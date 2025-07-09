@@ -34,17 +34,21 @@ import {
   getMonthlyJobStats,
   getQuarterlyJobStats,
   getYearlyJobStats,
+  validateCreateJob,
+  validateUpdateJob,
+  validateUpdateJobStatus,
+  validateUpdateApplicationStatus,
 } from "../controllers/job.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
 const jobRouter = Router();
 
-jobRouter.post("/create", authenticate, createJobPosting);
+jobRouter.post("/create", authenticate, validateCreateJob, createJobPosting);
 jobRouter.get("/list", viewJobList);
 jobRouter.get("/get-by-employer/:employerId", getJobsByEmployer);
 jobRouter.get("/get-filter-options", getFilterOptions);
 jobRouter.get("/detail/:jobId", viewJobDetail);
-jobRouter.put("/update/:jobId", authenticate, updateJob);
+jobRouter.put("/update/:jobId", authenticate, validateUpdateJob, updateJob);
 jobRouter.delete("/delete/:jobId", authenticate, deleteJob);
 // ===== ADMIN DASHBOARD FEATURES =====
 /**
@@ -76,7 +80,7 @@ jobRouter.get("/stats/yearly", getYearlyJobStats);
  * Create a new job post
  * Allowed Roles: Recruiter (Nhà Tuyển Dụng)
  */
-jobRouter.post("/", authenticate, createJobPosting);
+jobRouter.post("/", authenticate, validateCreateJob, createJobPosting);
 
 /**
  * GET /api/v1/job
@@ -126,7 +130,7 @@ jobRouter.get("/:id", viewJobDetail);
  * Update an existing job post
  * Allowed Roles: Recruiter (owner of the job)
  */
-jobRouter.put("/:id", authenticate, updateJob);
+jobRouter.put("/:id", authenticate, validateUpdateJob, updateJob);
 
 /**
  * DELETE /api/v1/job/:id
@@ -149,7 +153,7 @@ jobRouter.put("/:id/hide", authenticate, hideJob);
  * Change the status of a job
  * Allowed Roles: Admin
  */
-jobRouter.patch("/:id/status", authenticate, updateJobStatus);
+jobRouter.patch("/:id/status", authenticate, validateUpdateJobStatus, updateJobStatus);
 
 /**
  * POST /api/v1/job/:id/view
@@ -188,7 +192,7 @@ jobRouter.get("/:id/applicants", authenticate, getJobApplicants);
  * Update the application status of an applicant
  * Allowed Roles: Recruiter (owner of the job)
  */
-jobRouter.patch("/:id/applications/:applicantId", authenticate, updateApplicationStatus);
+jobRouter.patch("/:id/applications/:applicantId", authenticate, validateUpdateApplicationStatus, updateApplicationStatus);
 
 /**
  * GET /api/v1/job/related/:id

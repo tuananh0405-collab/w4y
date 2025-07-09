@@ -12,6 +12,7 @@ import {
 } from "../config/env.js";
 import jwt from "jsonwebtoken";
 import passport from "../config/passport.js";
+import { body, validationResult } from "express-validator";
 
 // Đăng ký người dùng
 // export const signUp = async (req, res, next) => {
@@ -60,6 +61,52 @@ import passport from "../config/passport.js";
 //     next(error);
 //   }
 // };
+
+// Validation middleware for sign up
+export const validateSignUp = [
+  body("name")
+    .trim()
+    .notEmpty().withMessage("Name is required")
+    .isLength({ min: 2, max: 50 }).withMessage("Name must be 2-50 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("Name must be valid and not random characters"),
+  body("email")
+    .trim()
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email address"),
+  body("password")
+    .notEmpty().withMessage("Password is required")
+    .isLength({ min: 8, max: 50 }).withMessage("Password must be 8-50 characters")
+    .matches(/[A-Za-z]/).withMessage("Password must contain letters")
+    .matches(/[0-9]/).withMessage("Password must contain numbers"),
+  body("accountType")
+    .notEmpty().withMessage("Account type is required")
+    .isIn(["Nhà Tuyển Dụng", "Ứng Viên", "Admin"]).withMessage("Invalid account type"),
+  body("gender")
+    .optional()
+    .isIn(["male", "female"]).withMessage("Gender must be 'male' or 'female'"),
+  body("phone")
+    .optional()
+    .isMobilePhone("vi-VN").withMessage("Invalid Vietnamese phone number"),
+  body("company")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Company name must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ỹ\s'.-]+$/u).withMessage("Company name must be valid and not random characters"),
+  body("city")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("City must be 2-100 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("City must be valid and not random characters"),
+  body("district")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("District must be 2-100 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("District must be valid and not random characters"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
 
 export const signUp = async (req, res, next) => {
   try {
