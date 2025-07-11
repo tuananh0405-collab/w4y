@@ -432,3 +432,114 @@ export const googleCallback = (req, res, next) => {
     }
   })(req, res, next);
 };
+
+// Validation middleware for admin sign up
+export const validateAdminSignUp = [
+  body("name")
+    .trim()
+    .notEmpty().withMessage("Name is required")
+    .isLength({ min: 2, max: 50 }).withMessage("Name must be 2-50 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("Name must be valid and not random characters"),
+  body("email")
+    .trim()
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email address"),
+  body("password")
+    .notEmpty().withMessage("Password is required")
+    .isLength({ min: 8, max: 50 }).withMessage("Password must be 8-50 characters")
+    .matches(/[A-Za-z]/).withMessage("Password must contain letters")
+    .matches(/[0-9]/).withMessage("Password must contain numbers"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Admin sign up
+export const adminSignUp = async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ success: false, message: "Admin already exists" });
+    }
+
+    // Create new admin user
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+      accountType: "Admin",
+      isVerified: true, // Admins are verified by default
+    });
+    await newUser.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Admin account created successfully",
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        accountType: newUser.accountType,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Validation middleware for admin sign in
+export const validateAdminSignIn = [
+  body("email")
+    .trim()
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email address"),
+  body("password")
+    .notEmpty().withMessage("Password is required"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Admin sign in
+export const adminSignIn = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user || user.accountType !== "Admin") {
+      return res.status(404).json({ success: false, message: "Admin not found" });
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: "Invalid password" });
+    }
+    if (!user.isVerified) {
+      return res.status(403).json({ success: false, message: "Admin account not verified" });
+    }
+    generateToken(res, user._id);
+    res.status(200).json({
+      success: true,
+      message: "Admin signed in successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        accountType: user.accountType,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
