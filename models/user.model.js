@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ['Nhà Tuyển Dụng', 'Ứng Viên', "Admin"],
+    enum: ["Nhà Tuyển Dụng", "Ứng Viên", "Admin"],
     required: true,
   },
   googleId: {
@@ -62,6 +62,14 @@ const userSchema = new mongoose.Schema({
   district: {
     // Thêm trường quận/huyện
     type: String,
+  },
+  dateOfBirth: {
+    type: Date,
+  },
+  status: {
+    type: String,
+    enum: ["Active", "Suspended"],
+    default: "Active",
   },
 });
 const User = mongoose.model("User", userSchema);
