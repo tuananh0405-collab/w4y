@@ -74,6 +74,14 @@ const userSchema = new mongoose.Schema({
     enum: ["Active", "Suspended"],
     default: "Active",
   },
+  dateOfBirth: {
+    type: Date,
+  },
+  status: {
+    type: String,
+    enum: ["Active", "Suspended"],
+    default: "Active",
+  },
 });
 
 const User = mongoose.model("User", userSchema);
