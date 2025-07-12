@@ -38,6 +38,8 @@ import {
   validateUpdateJob,
   validateUpdateJobStatus,
   validateUpdateApplicationStatus,
+  getJobCategoriesByParent,
+  getJobCategoriesRecursive,
 } from "../controllers/job.controller.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 
@@ -117,6 +119,14 @@ jobRouter.get("/expired", authenticate, getExpiredJobs);
  * Allowed Roles: All
  */
 jobRouter.get("/filter-options", getFilterOptions);
+
+/**
+ * GET /api/v1/job/categories-by-parent
+ * Get job categories by parent ID
+ * Allowed Roles: All
+ */
+jobRouter.get("/job-categories/:parentId", getJobCategoriesByParent);
+jobRouter.get("/job-categories-recursive/:categoryId", getJobCategoriesRecursive);
 
 /**
  * GET /api/v1/job/:id

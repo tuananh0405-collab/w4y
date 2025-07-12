@@ -1,8 +1,10 @@
-import Job from "../models/job.model.js";
+import Job, { experienceEnum, levelEnum, salaryRangeUnitEnum } from "../models/job.model.js";
 import User from "../models/user.model.js";  // Đảm bảo bạn import User model
 import Application from "../models/application.model.js";
 import ApplicantProfile from "../models/applicantProfile.model.js";
 import { body, param, validationResult } from "express-validator";
+import JobCategory from "../models/jobCategory.model.js";
+import { Types } from "mongoose";
 
 /**
  * POST /api/v1/job
@@ -35,7 +37,8 @@ export const createJobPosting = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills
+      skills,
+      categoryId,
     } = req.body;
 
     // Ensure all required text fields are trimmed and string
@@ -56,7 +59,8 @@ export const createJobPosting = async (req, res, next) => {
       deadline,
       keywords,
       skills,
-      status: "active"
+      status: "active",
+      categoryId: Types.ObjectId.createFromHexString(categoryId),
     };
 
     // Create new job
@@ -107,7 +111,12 @@ export const viewJobList = async (req, res, next) => {
       keywords, 
       skills, 
       industry, 
+      categoryIds,
       level,
+      experience,
+      salaryRangeStart,
+      salaryRangeEnd,
+      salaryRangeUnit,
       status = "active", // Default to active jobs only
       page = 1,
       limit = 10
@@ -123,7 +132,27 @@ export const viewJobList = async (req, res, next) => {
     if (location) filter.location = { $regex: location, $options: 'i' };
     if (position) filter.position = { $regex: position, $options: 'i' };
     if (industry) filter.industry = { $regex: industry, $options: 'i' };
-    if (level) filter.level = { $regex: level, $options: 'i' };
+    if (categoryIds) {
+      if (categoryIds) {
+        let categoryIdArray = [];
+        if (Array.isArray(categoryIds)) {
+          categoryIdArray = categoryIds;
+        } else if (typeof categoryIds === 'string') {
+          // comma-separated or single value
+          categoryIdArray = categoryIds.split(',').map(id => id.trim());
+        }
+
+        console.log(categoryIdArray)
+
+        const ids = categoryIdArray.filter((id) => Types.ObjectId.isValid(id));
+        if (ids.length > 0) {
+          filter.categoryId = { $in: ids };
+        }
+      }
+    }
+    if (level) filter.level = { $regex: level, $options: 'i'};
+    if (experience) filter.experience = { $regex: experience, $options: 'i'};
+
     if (keywords) {
       filter.$text = { $search: keywords };
     }
@@ -132,17 +161,37 @@ export const viewJobList = async (req, res, next) => {
       filter.skills = { $in: skillsArray };
     }
 
+    const salaryRangeFilter = {};
+    if (salaryRangeUnit) {
+      if (salaryRangeStart || salaryRangeEnd) {
+        salaryRangeFilter["$or"] = [
+          {
+            salaryRangeUnit: salaryRangeUnit,
+            ...(salaryRangeStart ? { salaryRangeStart: { $gte: parseInt(salaryRangeStart) } } : {}),
+            ...(salaryRangeEnd ? { salaryRangeEnd: { $gte: parseInt(salaryRangeEnd) } } : {}),
+          },
+          {
+            $and: [
+              { salaryRangeStart: { $exists: false } },
+              { salaryRangeEnd: { $exists: false } }
+            ]
+          }
+        ];
+      }
+    }
+
     // Pagination
     const skip = (page - 1) * limit;
 
     // Get jobs with pagination
-    const jobs = await Job.find(filter)
+    console.log(JSON.stringify({ "$and": [filter, salaryRangeFilter]}))
+    const jobs = await Job.find({ "$and": [filter, salaryRangeFilter]})
       .sort({ createdAt: -1, priorityLevel: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     // Get total count for pagination
-    const totalJobs = await Job.countDocuments(filter);
+    const totalJobs = await Job.countDocuments({ "$and": [filter, salaryRangeFilter]});
 
     // Format jobs with employer information
     const formattedJobs = await Promise.all(
@@ -973,10 +1022,12 @@ export const getFilterOptions = async (req, res, next) => {
     const positions = await Job.distinct("position");
 
     // Get unique industries
-    const industries = await Job.distinct("industry");
+    const industries = await JobCategory.find({ parentId: null }).select("_id name");
 
-    // Get unique levels
-    const levels = await Job.distinct("level");
+    // Get fields with enum associated with them
+    const levels = levelEnum;
+    const experiences = experienceEnum;
+    const salaryRangeUnits = salaryRangeUnitEnum;
 
     res.status(200).json({
       success: true,
@@ -986,10 +1037,73 @@ export const getFilterOptions = async (req, res, next) => {
         positions,
         industries,
         levels,
+        experiences,
+        salaryRangeUnits,
       },
     });
   } catch (error) {
     next(error);
+  }
+};
+
+// Not actually an existing function! Did not understand why these functions that are still being used are marked as "deprecated", though, so still putting this here
+export const getJobCategoriesByParent = async (req, res, next) => {
+  try {
+    const { parentId } = req.params;
+    let filter;
+    if (Types.ObjectId.isValid(parentId)) {
+      filter = { parentId: Types.ObjectId.createFromHexString(parentId) };
+    } else {
+      filter = { parentId: null };
+    }
+
+    console.log(filter)
+    const jobCategories = await JobCategory.find(filter).select("_id name parentId");
+
+    res.status(200).json({
+      success: true,
+      message: `Fetched ${jobCategories.length} job category/categories successfully`,
+      data: jobCategories,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getJobCategoriesRecursive = async (req, res, next) => {
+  try {
+    const { categoryId } = req.params;
+
+    const result = await jobCategoriesRecursiveRoutine(Types.ObjectId.createFromHexString(categoryId));
+
+    res.status(200).json({
+      success: true,
+      message: `Fetched job category/categories recursively successfully`,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const jobCategoriesRecursiveRoutine = async (categoryId) => {
+  try {
+
+    const category = await JobCategory.findById(categoryId).select("_id name parentId").lean();
+    if (!category) return null;
+
+    const children = await JobCategory.find({ parentId: categoryId }).select("_id name parentId").lean();
+
+    const childrenTree = await Promise.all(
+      children.map(child => jobCategoriesRecursiveRoutine(child._id)).filter(child => !!child)
+    );
+
+    return {
+      ...category,
+      children: childrenTree
+    };
+  } catch (error) {
+    console.error(error);
   }
 };
 
@@ -1197,18 +1311,14 @@ export const validateCreateJob = [
     .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Description must be valid and not random characters"),
   body("requirements")
     .trim()
-    .notEmpty().withMessage("Requirements are required")
-    .isLength({ min: 10, max: 1000 }).withMessage("Requirements must be 10-1000 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Requirements must be valid and not random characters"),
+    .notEmpty().withMessage("Requirements are required"),
   body("salary")
     .trim()
     .notEmpty().withMessage("Salary is required")
     .isLength({ min: 2, max: 50 }).withMessage("Salary must be 2-50 characters")
     .matches(/^[0-9]+$/u).withMessage("Salary must be a valid number"),
   body("deliveryTime")
-    .optional()
-    .isLength({ min: 2, max: 50 }).withMessage("Delivery time must be 2-50 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Delivery time must be valid and not random characters"),
+    .optional(),
   body("priorityLevel")
     .optional()
     .isIn(["Nổi bật", "Thông thường"]).withMessage("Invalid priority level"),
@@ -1216,9 +1326,7 @@ export const validateCreateJob = [
     .optional()
     .isInt({ min: 1, max: 1000 }).withMessage("Quantity must be a positive integer (1-1000)"),
   body("level")
-    .optional()
-    .isLength({ min: 2, max: 50 }).withMessage("Level must be 2-50 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Level must be valid and not random characters"),
+    .optional(),
   body("industry")
     .optional()
     .isLength({ min: 2, max: 100 }).withMessage("Industry must be 2-100 characters")
@@ -1232,9 +1340,7 @@ export const validateCreateJob = [
     .isLength({ min: 2, max: 100 }).withMessage("Location must be 2-100 characters")
     .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Location must be valid and not random characters"),
   body("experience")
-    .optional()
-    .isLength({ min: 2, max: 100 }).withMessage("Experience must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u).withMessage("Experience must be valid and not random characters"),
+    .optional(),
   body("deadline")
     .optional()
     .isISO8601().withMessage("Deadline must be a valid date"),
@@ -1244,8 +1350,12 @@ export const validateCreateJob = [
   body("skills")
     .optional()
     .isArray().withMessage("Skills must be an array"),
+  body("categoryId")
+    .isMongoId()
+    .withMessage('Invalid ObjectId format'),
   (req, res, next) => {
     const errors = validationResult(req);
+    console.log(req.body)
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
