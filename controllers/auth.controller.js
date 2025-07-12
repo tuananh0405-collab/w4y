@@ -249,13 +249,6 @@ export const signInAdmin = async (req, res, next) => {
       throw error;
     }
 
-    // Kiểm tra xem email đã được xác minh chưa
-    if (!user.isVerified) {
-      const error = new Error("Email not verified");
-      error.statusCode = 403;
-      throw error;
-    }
-
     if (user.accountType !== "Admin") {
       const error = new Error("You are not authorized to access this");
       error.statusCode = 403;

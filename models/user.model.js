@@ -1,38 +1,42 @@
-// Import dependencies
 import mongoose from "mongoose";
 
-// User Schema
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
   },
+
   email: {
     type: String,
     required: true,
     unique: true,
   },
+
   password: {
     type: String,
     required: true,
   },
+
   avatarUrl: {
-    type: String, // Thêm trường ảnh đại diện
+    type: String,
     default: "",
   },
+
   accountType: {
     type: String,
-    enum: ['Nhà Tuyển Dụng', 'Ứng Viên', "Admin"],
+    enum: ["Nhà Tuyển Dụng", "Ứng Viên", "Admin"],
     required: true,
   },
+
   googleId: {
     type: String,
     unique: true,
     sparse: true,
   },
+
   points: {
     type: Number,
-    default: 0, // mặc định 0 điểm
+    default: 0,
     min: 0,
   },
 
@@ -40,29 +44,38 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-  isVerified: { type: Boolean, default: false },
+
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+
   verificationCode: String,
+
   gender: {
-    // Thêm trường giới tính
     type: String,
     enum: ["male", "female"],
   },
-  phone: {
-    // Thêm trường số điện thoại
-    type: String,
+
+  phone: String,
+
+  company: String,
+
+  city: String,
+
+  district: String,
+
+  dateOfBirth: {
+    type: Date,
   },
-  company: {
-    // Thêm trường công ty
+
+  status: {
     type: String,
-  },
-  city: {
-    // Thêm trường tỉnh/thành phố
-    type: String,
-  },
-  district: {
-    // Thêm trường quận/huyện
-    type: String,
+    enum: ["Active", "Suspended"],
+    default: "Active",
   },
 });
+
 const User = mongoose.model("User", userSchema);
+
 export default User;
