@@ -41,7 +41,7 @@ import {
   getJobCategoriesByParent,
   getJobCategoriesRecursive,
 } from "../controllers/job.controller.js";
-import { authenticate } from "../middlewares/auth.middleware.js";
+import { authenticate, authorizeAdmin } from "../middlewares/auth.middleware.js";
 
 const jobRouter = Router();
 
@@ -58,22 +58,21 @@ jobRouter.delete("/delete/:jobId", authenticate, deleteJob);
  * Get monthly job statistics for the admin dashboard
  * Allowed Roles: Admin
  */
-//admin athen required
-jobRouter.get("/stats/monthly", getMonthlyJobStats);
+jobRouter.get("/stats/monthly",authenticate, authorizeAdmin, getMonthlyJobStats);
 
 /**
  * GET /api/v1/job/stats/quarterly
  * Get quarterly job statistics for the admin dashboard
  * Allowed Roles: Admin
  */ 
-jobRouter.get("/stats/quarterly", getQuarterlyJobStats);
+jobRouter.get("/stats/quarterly",authenticate, authorizeAdmin, getQuarterlyJobStats);
 
 /**
  * GET /api/v1/job/stats/yearly
  * Get yearly job statistics for the admin dashboard
  * Allowed Roles: Admin
  */
-jobRouter.get("/stats/yearly", getYearlyJobStats);
+jobRouter.get("/stats/yearly",authenticate, authorizeAdmin, getYearlyJobStats);
 
 // ===== BASIC CRUD OPERATIONS =====
 
@@ -96,8 +95,7 @@ jobRouter.get("/", viewJobList);
  * Get an overview of job posts
  * Allowed Roles: Admin
  */
-//authenticate required
-jobRouter.get("/overview", getJobOverview);
+jobRouter.get("/overview",authenticate, authorizeAdmin, getJobOverview);
 
 /**
  * GET /api/v1/job/recommended
@@ -163,7 +161,7 @@ jobRouter.put("/:id/hide", authenticate, hideJob);
  * Change the status of a job
  * Allowed Roles: Admin
  */
-jobRouter.patch("/:id/status", authenticate, validateUpdateJobStatus, updateJobStatus);
+jobRouter.patch("/:id/status", authenticate, authorizeAdmin, validateUpdateJobStatus, updateJobStatus);
 
 /**
  * POST /api/v1/job/:id/view
@@ -210,8 +208,5 @@ jobRouter.patch("/:id/applications/:applicantId", authenticate, validateUpdateAp
  * Allowed Roles: All
  */
 jobRouter.get("/related/:id", getRelatedJobs);
-
-
-
 
 export default jobRouter;

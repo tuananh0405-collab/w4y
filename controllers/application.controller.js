@@ -247,3 +247,86 @@ Trân trọng,
     next(error);
   }
 };
+
+// List jobs a user has applied for, with pagination and advanced search
+export const listAppliedJobs = async (req, res, next) => {
+  try {
+    const applicantId = req.user._id;
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Build search filter for job fields
+    let jobSearchFilter = {};
+    if (search && search.trim() !== "") {
+      const regex = new RegExp(search, "i");
+      jobSearchFilter = {
+        $or: [
+          { title: regex },
+          { description: regex },
+          { salary: regex },
+          { position: regex },
+          { location: regex },
+        ],
+      };
+    }
+
+    // Find applications for this user
+    const applications = await Application.find({ applicantId })
+      .populate({
+        path: "jobId",
+        match: jobSearchFilter,
+        select: "title description salary position location employerId experience",
+        populate: { path: "employerId", select: "name" },
+      })
+      .sort({ appliedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Filter out applications where jobId is null (not matching search)
+    const filteredApplications = applications.filter(app => app.jobId);
+
+    // Get total count for pagination
+    const totalApplications = await Application.countDocuments({
+      applicantId,
+    });
+    // If searching, count only those matching jobs
+    let totalFiltered = totalApplications;
+    if (search && search.trim() !== "") {
+      // Count applications with jobs matching the search
+      const allApps = await Application.find({ applicantId }).populate({
+        path: "jobId",
+        match: jobSearchFilter,
+        select: "_id",
+      });
+      totalFiltered = allApps.filter(app => app.jobId).length;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Applied jobs fetched successfully",
+      data: filteredApplications.map(app => ({
+        job: {
+          id: app.jobId._id,
+          title: app.jobId.title,
+          description: app.jobId.description,
+          salary: app.jobId.salary,
+          position: app.jobId.position,
+          location: app.jobId.location,
+          experience: app.jobId.experience,
+          employerName: app.jobId.employerId?.name || "",
+        },
+        appliedAt: app.appliedAt,
+        resumeFile: app.resumeFile,
+      })),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalFiltered / limit),
+        totalApplications: totalFiltered,
+        hasNextPage: page * limit < totalFiltered,
+        hasPrevPage: page > 1,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
