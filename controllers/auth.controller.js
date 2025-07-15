@@ -12,6 +12,7 @@ import {
 } from "../config/env.js";
 import jwt from "jsonwebtoken";
 import passport from "../config/passport.js";
+import { body, validationResult } from "express-validator";
 
 // Đăng ký người dùng
 // export const signUp = async (req, res, next) => {
@@ -60,6 +61,52 @@ import passport from "../config/passport.js";
 //     next(error);
 //   }
 // };
+
+// Validation middleware for sign up
+export const validateSignUp = [
+  body("name")
+    .trim()
+    .notEmpty().withMessage("Name is required")
+    .isLength({ min: 2, max: 50 }).withMessage("Name must be 2-50 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("Name must be valid and not random characters"),
+  body("email")
+    .trim()
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email address"),
+  body("password")
+    .notEmpty().withMessage("Password is required")
+    .isLength({ min: 8, max: 50 }).withMessage("Password must be 8-50 characters")
+    .matches(/[A-Za-z]/).withMessage("Password must contain letters")
+    .matches(/[0-9]/).withMessage("Password must contain numbers"),
+  body("accountType")
+    .notEmpty().withMessage("Account type is required")
+    .isIn(["Nhà Tuyển Dụng", "Ứng Viên", "Admin"]).withMessage("Invalid account type"),
+  body("gender")
+    .optional()
+    .isIn(["male", "female"]).withMessage("Gender must be 'male' or 'female'"),
+  body("phone")
+    .optional()
+    .isMobilePhone("vi-VN").withMessage("Invalid Vietnamese phone number"),
+  body("company")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("Company name must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ỹ\s'.-]+$/u).withMessage("Company name must be valid and not random characters"),
+  body("city")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("City must be 2-100 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("City must be valid and not random characters"),
+  body("district")
+    .optional()
+    .isLength({ min: 2, max: 100 }).withMessage("District must be 2-100 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("District must be valid and not random characters"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
 
 export const signUp = async (req, res, next) => {
   try {
@@ -157,6 +204,53 @@ export const signIn = async (req, res, next) => {
     // Kiểm tra xem email đã được xác minh chưa
     if (!user.isVerified) {
       const error = new Error("Email not verified");
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Tạo JWT Token
+    generateToken(res, user._id);
+    res.status(200).json({
+      success: true,
+      message: "User signed in successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        accountType: user.accountType,
+        points: user.points,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Đăng nhập admin
+export const signInAdmin = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    // Tìm người dùng theo email
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      const error = new Error("User not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Kiểm tra mật khẩu
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      const error = new Error("Invalid password");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    if (user.accountType !== "Admin") {
+      const error = new Error("You are not authorized to access this");
       error.statusCode = 403;
       throw error;
     }
@@ -330,4 +424,115 @@ export const googleCallback = (req, res, next) => {
       next(error);
     }
   })(req, res, next);
+};
+
+// Validation middleware for admin sign up
+export const validateAdminSignUp = [
+  body("name")
+    .trim()
+    .notEmpty().withMessage("Name is required")
+    .isLength({ min: 2, max: 50 }).withMessage("Name must be 2-50 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("Name must be valid and not random characters"),
+  body("email")
+    .trim()
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email address"),
+  body("password")
+    .notEmpty().withMessage("Password is required")
+    .isLength({ min: 8, max: 50 }).withMessage("Password must be 8-50 characters")
+    .matches(/[A-Za-z]/).withMessage("Password must contain letters")
+    .matches(/[0-9]/).withMessage("Password must contain numbers"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Admin sign up
+export const adminSignUp = async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ success: false, message: "Admin already exists" });
+    }
+
+    // Create new admin user
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+      accountType: "Admin",
+      isVerified: true, // Admins are verified by default
+    });
+    await newUser.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Admin account created successfully",
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        accountType: newUser.accountType,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Validation middleware for admin sign in
+export const validateAdminSignIn = [
+  body("email")
+    .trim()
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email address"),
+  body("password")
+    .notEmpty().withMessage("Password is required"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Admin sign in
+export const adminSignIn = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user || user.accountType !== "Admin") {
+      return res.status(404).json({ success: false, message: "Admin not found" });
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: "Invalid password" });
+    }
+    if (!user.isVerified) {
+      return res.status(403).json({ success: false, message: "Admin account not verified" });
+    }
+    generateToken(res, user._id);
+    res.status(200).json({
+      success: true,
+      message: "Admin signed in successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        accountType: user.accountType,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
