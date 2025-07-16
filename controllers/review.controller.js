@@ -1,10 +1,11 @@
 import Review from "../models/review.model.js";
+import Application from "../models/application.model.js";
 
 export const reviewCandidate = async (req, res) => {
   try {
     const reviewerId = req.user._id; // lấy từ middleware authenticate
     const reviewedUserId = req.params.reviewUserId;
-    const { rating, comment } = req.body;
+    const { rating, comment, jobId } = req.body;
 
     if (reviewerId.toString() === reviewedUserId) {
       return res.status(400).json({ message: "Không thể tự review chính mình." });
@@ -16,6 +17,14 @@ export const reviewCandidate = async (req, res) => {
       rating,
       comment,
     });
+
+    // Mark the application as reviewed by employer
+    if (jobId) {
+      await Application.findOneAndUpdate(
+        { applicantId: reviewedUserId, jobId, },
+        { reviewedByEmployer: true }
+      );
+    }
 
     res.status(201).json({ message: "Review thành công.", review });
   } catch (err) {

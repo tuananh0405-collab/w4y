@@ -24,6 +24,10 @@ const applicationSchema = new mongoose.Schema({
     path: String,   // Lưu đường dẫn tới CV
     contentType: String,   // Lưu loại nội dung (application/pdf, application/msword...)
   },
+  reviewedByEmployer: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const Application = mongoose.model("Application", applicationSchema);

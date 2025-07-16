@@ -9,10 +9,8 @@ export const setOnSetActiveConversation = (
   socket.on("setActiveConversation", ({ chatToken, receiverId }) => {
     withChatTokenValidation(chatToken, socket, async (decoded) => {
       try {
-        console.log("AAAAAAAAAA");
         const { senderId } = decoded;
 
-        console.log(`AJSCHBJA: ${senderId} ${receiverId}`);
         const receiver = await User.findById(receiverId);
         if (!receiver) {
           socket.emit("connectToConversation", {
