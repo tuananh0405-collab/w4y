@@ -1047,10 +1047,20 @@ export const getRelatedJobs = async (req, res, next) => {
 // Existing functions (keeping for backward compatibility)
 export const getFilterOptions = async (req, res, next) => {
   try {
-    // Get unique locations
-    const locations = await Job.distinct("location");
+    // Lấy danh sách location duy nhất từ DB
+    const rawLocations = await Job.distinct("location");
 
-    // Get unique positions
+    // Lấy phần sau dấu ',' cuối cùng
+    const locations = rawLocations
+      .map((loc) => {
+        if (typeof loc !== "string") return "";
+        const parts = loc.split(",");
+        return parts[parts.length - 1].trim(); // phần sau dấu ',' cuối cùng
+      })
+      .filter((loc) => loc) // bỏ rỗng
+      .filter((value, index, self) => self.indexOf(value) === index); // lọc trùng
+
+    // Các filter khác giữ nguyên
     const positions = await Job.distinct("position");
 
     // Get unique industries
