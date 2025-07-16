@@ -1,5 +1,35 @@
 import mongoose from "mongoose";
 
+export const levelEnum = [
+  "Nhân viên",
+  "Trưởng nhóm",
+  "Trưởng/Phó phòng",
+  "Quản lý / Giám sát",
+  "Trưởng chi nhánh",
+  "Phó giám đốc",
+  "Giám đốc",
+  "Thực tập sinh",
+];
+
+export const experienceEnum = [
+  "Không yêu cầu",
+  "Dưới 1 năm",
+  "1 năm",
+  "2 năm",
+  "3 năm",
+  "4 năm",
+  "5 năm",
+  "Trên 5 năm",
+];
+
+// Salary range unit enum
+export const salaryRangeUnitEnum = [
+  "VND/tháng",
+  "USD/tháng",
+  "VND/năm",
+  "USD/năm",
+];
+
 // Job Schema
 const jobSchema = new mongoose.Schema({
   employerId: {
@@ -14,6 +44,16 @@ const jobSchema = new mongoose.Schema({
   description: String,
   requirements: String,
   salary: String,
+  // Salary Range
+  salaryRange: {
+    start: { type: Number }, // Start of salary range
+    end: { type: Number }, // End of salary range
+  },
+  salaryRangeUnit: {
+    type: String,
+    enum: salaryRangeUnitEnum,
+    default: "VND/tháng",
+  },
   deliveryTime: String,
   priorityLevel: {
     type: String,
@@ -40,38 +80,52 @@ const jobSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-  deadline: {  // Thêm trường hạn nộp hồ sơ
+  // Thêm trường hạn nộp hồ sơ
+  deadline: {
     type: Date,
-    required: false,  // Có thể không bắt buộc nếu bạn muốn
+    required: false, // Có thể không bắt buộc nếu bạn muốn
   },
-  quantity: {  // Số lượng người tuyển dụng
+  // Số lượng người tuyển dụng
+  quantity: {
     type: Number,
     // required: true,
   },
-  level: {  // Cấp bậc
+  level: {
+    type: String,
+    enum: levelEnum,
+    default: null,
+  },
+  // Lĩnh vực
+  industry: {
     type: String,
     // required: true,
   },
-  industry: {  // Ngành nghề
+  // Chức danh
+  position: {
     type: String,
     // required: true,
   },
-  position: {  // Chức danh
+  // Địa điểm làm việc
+  location: {
     type: String,
     // required: true,
   },
-  location: {  // Địa điểm làm việc
+  // Kinh nghiệm
+  experience: {
     type: String,
-    // required: true,
+    enum: experienceEnum,
+    default: null,
   },
-  experience: {  // Kinh nghiệm
-    type: String,
-    // required: true,
+  // Danh mục/Lĩnh vực nghề
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "JobCategory",
+    required: true,
   },
 });
 
 // Index for better search performance
-jobSchema.index({ title: 'text', description: 'text', requirements: 'text' });
+jobSchema.index({ title: "text", description: "text", requirements: "text" });
 jobSchema.index({ status: 1, isHidden: 1 });
 jobSchema.index({ employerId: 1 });
 jobSchema.index({ deadline: 1 });
