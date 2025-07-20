@@ -82,13 +82,6 @@ const userSchema = new mongoose.Schema({
     enum: ["Active", "Suspended"],
     default: "Active",
   },
-
-  skills: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "JobSkill",
-    },
-  ],
 });
 
 const User = mongoose.model("User", userSchema);

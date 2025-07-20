@@ -22,6 +22,7 @@ import { setOnSendChatMessage } from "./events/onSendChatMessage.js";
 import { setOnSetActiveConversation } from "./events/onSetActiveConversation.js";
 import chatRouter from "./routes/chat.routes.js";
 import jobCategoryRouter from "./routes/jobCategory.routes.js";
+import jobSkillRouter from "./routes/jobSkill.routes.js";
 
 // Thêm đoạn này để lấy __dirname trong ES module
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +50,7 @@ app.use("/api/v1/user", userRouter);
 app.use("/api/v1/applicant", applicantRouter);
 app.use("/api/v1/job", jobRouter);
 app.use("/api/v1/job-categories", jobCategoryRouter);
+app.use("/api/v1/job-skills", jobSkillRouter);
 app.use("/api/v1/application", applicationRouter);
 app.use("/api/v1/payment", paymentRouter);
 app.use("/api/v1/review", reviewRouter);

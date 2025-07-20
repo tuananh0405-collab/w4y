@@ -67,3 +67,21 @@ export const jobCategoriesRecursiveRoutine = async (categoryId) => {
     console.error(error);
   }
 };
+
+export const createJobCategory = async (req, res, next) => {
+  try {
+    const { name, parentId } = req.body;
+    const newJobCategory = new JobCategory({
+      name,
+      parentId: parentId || null,
+    });
+    const savedJobCategory = await newJobCategory.save();
+    res.status(201).json({
+      success: true,
+      message: "Job category created successfully",
+      data: savedJobCategory,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
