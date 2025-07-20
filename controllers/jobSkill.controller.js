@@ -10,7 +10,7 @@ export const getJobSkills = async (req, res, next) => {
 
     const skip = (page - 1) * limit;
 
-    const skills = await JobSkill.find(filter)
+    const skillIds = await JobSkill.find(filter)
       .sort({ createdAt: -1, priorityLevel: -1 })
       .skip(skip)
       .limit(parseInt(limit));

@@ -10,6 +10,8 @@ import { body, param, validationResult } from "express-validator";
 import JobCategory from "../models/jobCategory.model.js";
 import { Types } from "mongoose";
 import { jobCategoriesRecursiveRoutine } from "./jobCategory.controller.js";
+import { isChromaConnected } from "../database/chromadb.js";
+import { addOrUpdateJobInChroma, deleteJobFromChroma, queryJobsFromChroma } from "../services/chroma.service.js";
 
 /**
  * POST /api/v1/job
@@ -42,7 +44,7 @@ export const createJobPosting = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills,
+      skillIds,
       categoryId,
     } = req.body;
 
@@ -65,7 +67,7 @@ export const createJobPosting = async (req, res, next) => {
         typeof experience === "string" ? experience.trim() : experience,
       deadline,
       keywords,
-      skills,
+      skillIds,
       status: "active",
       categoryId: Types.ObjectId.createFromHexString(categoryId),
     };
@@ -76,6 +78,16 @@ export const createJobPosting = async (req, res, next) => {
 
     // Get employer information
     const employer = await User.findById(req.user._id).select("name");
+
+    // After sending the response, update the document on ChromaDB
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        // Use setImmediate to avoid blocking the event loop
+        setImmediate(() => {
+          addOrUpdateJobInChroma(newJob._id.toString());
+        });
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -116,7 +128,7 @@ export const viewJobList = async (req, res, next) => {
       location,
       position,
       keywords,
-      skills,
+      skillIds,
       industry,
       categoryIds,
       level,
@@ -174,9 +186,9 @@ export const viewJobList = async (req, res, next) => {
     if (keywords) {
       filter.$text = { $search: keywords };
     }
-    if (skills) {
-      const skillsArray = skills.split(",").map((skill) => skill.trim());
-      filter.skills = { $in: skillsArray };
+    if (skillIds) {
+      const skillsArray = skillIds.split(",").map((skill) => skill.trim());
+      filter.skillIds = { $in: skillsArray };
     }
 
     const salaryRangeFilter = {};
@@ -273,7 +285,7 @@ export const viewJobDetail = async (req, res, next) => {
     // Find and populate
     const job = await Job.findById(req.params.id)
       .populate("categoryId")
-      .populate("skills");
+      .populate("skillIds");
 
     if (!job) {
       return res.status(404).json({
@@ -314,8 +326,8 @@ export const viewJobDetail = async (req, res, next) => {
         position: job.position,
         location: job.location,
         keywords: job.keywords,
-        categoryId: job.categoryId,
-        skills: job.skills,
+        category: job.categoryId,
+        skills: job.skillIds,
         views: job.views,
         status: job.status,
       },
@@ -348,7 +360,7 @@ export const updateJob = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills,
+      skillIds,
     } = req.body;
 
     // Find job
@@ -386,9 +398,19 @@ export const updateJob = async (req, res, next) => {
     if (typeof experience === "string") job.experience = experience.trim();
     if (deadline !== undefined) job.deadline = deadline;
     if (keywords !== undefined) job.keywords = keywords;
-    if (skills !== undefined) job.skills = skills;
+    if (skillIds !== undefined) job.skillIds = skillIds;
 
     const updatedJob = await job.save();
+
+    // After sending the response, update the document on ChromaDB
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        // Use setImmediate to avoid blocking the event loop
+        setImmediate(() => {
+          addOrUpdateJobInChroma(newJob._id.toString());
+        });
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -429,6 +451,14 @@ export const deleteJob = async (req, res, next) => {
 
     // Delete the job
     await Job.findByIdAndDelete(id);
+
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        setImmediate(() => {
+          deleteJobFromChroma(id);
+        });
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -818,7 +848,7 @@ export const trackJobView = async (req, res, next) => {
 
 /**
  * GET /api/v1/job/recommended
- * Get AI-recommended jobs for the logged-in applicant
+ * Get filter-based job recommendations for the logged-in applicant
  * Allowed Roles: Applicant
  */
 export const getRecommendedJobs = async (req, res, next) => {
@@ -856,8 +886,8 @@ export const getRecommendedJobs = async (req, res, next) => {
       ];
     }
 
-    if (profile.skills && profile.skills.length > 0) {
-      recommendationQuery.skills = { $in: profile.skills };
+    if (profile.skillIds && profile.skillIds.length > 0) {
+      recommendationQuery.skillIds = { $in: profile.skillIds };
     }
 
     // Get recommended jobs
@@ -893,6 +923,84 @@ export const getRecommendedJobs = async (req, res, next) => {
       data: formattedJobs,
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/job/ai-recommended
+ * Get AI-powered job recommendations for the logged-in applicant using ChromaDB.
+ * Allowed Roles: Applicant
+ */
+export const getAIRecommendedJobs = async (req, res, next) => {
+  try {
+    // 1. Check if user is an applicant
+    if (req.user.accountType !== "Ứng Viên") {
+      return res.status(403).json({
+        success: false,
+        message: "Only applicants can get job recommendations",
+      });
+    }
+
+    // 2. Get applicant profile and populate their skills
+    const profile = await ApplicantProfile.findOne({ userId: req.user._id })
+      .populate("skillIds", "name"); // Assumes profile has 'skillIds' ref to JobSkill
+
+    if (!profile) {
+      return res.status(200).json({
+        success: true,
+        message: "No profile found to generate AI recommendations.",
+        data: [],
+      });
+    }
+
+    // 3. Construct a query text from the user's profile for ChromaDB
+    const skillNames = profile.skillIds?.map((skill) => skill.name).join(", ") || "none";
+    const queryText = `Title: ${profile.jobTitle || ""}. Skills: ${skillNames}.`;
+
+    // 4. Query ChromaDB to get the most relevant job IDs
+    const recommendedJobIds = await queryJobsFromChroma(queryText, 10);
+
+    if (!recommendedJobIds || recommendedJobIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Could not find any AI-recommended jobs.",
+        data: [],
+      });
+    }
+
+    // 5. Fetch the full job details from MongoDB for the recommended IDs
+    const jobsFromMongo = await Job.find({
+      _id: { $in: recommendedJobIds },
+      status: "active", // Ensure jobs are active and not hidden
+      isHidden: false,
+    }).populate("employerId", "name");
+
+    // 6. Sort the MongoDB results to match the relevance order from ChromaDB
+    const jobMap = new Map(jobsFromMongo.map(job => [job._id.toString(), job]));
+    const sortedJobs = recommendedJobIds.map(id => jobMap.get(id)).filter(Boolean);
+
+    // 7. Format the final response
+    const formattedJobs = sortedJobs.map((job) => ({
+      id: job._id,
+      employerName: job.employerId?.name,
+      title: job.title,
+      description: job.description,
+      salary: job.salary,
+      location: job.location,
+      experience: job.experience,
+      level: job.level,
+      createdAt: job.createdAt,
+      deadline: job.deadline,
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "AI-recommended jobs fetched successfully",
+      data: formattedJobs,
+    });
+  } catch (error) {
+    // If this fails, the frontend can call the other /recommended endpoint
     next(error);
   }
 };
@@ -993,9 +1101,9 @@ export const getRelatedJobs = async (req, res, next) => {
       ],
     };
 
-    // Add skills matching if available
-    if (referenceJob.skills && referenceJob.skills.length > 0) {
-      relatedQuery.skills = { $in: referenceJob.skills };
+    // Add skillIds matching if available
+    if (referenceJob.skillIds && referenceJob.skillIds.length > 0) {
+      relatedQuery.skillIds = { $in: referenceJob.skillIds };
     }
 
     // Get related jobs
@@ -1364,14 +1472,14 @@ export const validateCreateJob = [
     .optional()
     .isArray()
     .withMessage("Keywords must be an array"),
-  body("skills")
+  body("skillIds")
     .optional()
     .isArray()
     .withMessage("Skills must be an array of skill IDs.")
-    .custom((skills) => {
-      if (skills) {
-        for (const skillId of skills) {
-          if (!mongoose.Types.ObjectId.isValid(skillId)) {
+    .custom((skillIds) => {
+      if (skillIds) {
+        for (const skillId of skillIds) {
+          if (!Types.ObjectId.isValid(skillId)) {
             throw new Error(`Invalid skill ID provided: ${skillId}`);
           }
         }
@@ -1425,13 +1533,13 @@ export const validateUpdateJob = [
   body("experience").optional().isIn(experienceEnum),
   body("deadline").optional().isISO8601().toDate(),
   body("keywords").optional().isArray(),
-  body("skills")
+  body("skillIds")
     .optional()
     .isArray()
     .withMessage("Skills must be an array of skill IDs.")
-    .custom((skills) => {
-      if (skills) {
-        for (const skillId of skills) {
+    .custom((skillIds) => {
+      if (skillIds) {
+        for (const skillId of skillIds) {
           if (!mongoose.Types.ObjectId.isValid(skillId)) {
             throw new Error(`Invalid skill ID provided: ${skillId}`);
           }

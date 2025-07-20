@@ -9,7 +9,7 @@ const applicantProfileSchema = new mongoose.Schema({
   },
   jobTitle: { type: String, default: "" }, // Thêm trường chức danh
   education: String,
-  skills: [
+  skillIds: [
     {
       type: mongoose.Schema.Types.ObjectId,
       ref: "JobSkill",

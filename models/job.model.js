@@ -75,7 +75,7 @@ const jobSchema = new mongoose.Schema({
     default: 0,
   },
   keywords: [String], // For search functionality
-  skills: [
+  skillIds: [
     {
       type: mongoose.Schema.Types.ObjectId,
       ref: "JobSkill",
@@ -136,7 +136,7 @@ jobSchema.index({ employerId: 1 });
 jobSchema.index({ deadline: 1 });
 jobSchema.index({ categoryId: 1 });
 jobSchema.index({ location: 1 });
-jobSchema.index({ skills: 1 });
+jobSchema.index({ skillIds: 1 });
 
 const Job = mongoose.model("Job", jobSchema);
 
