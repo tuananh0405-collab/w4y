@@ -1157,10 +1157,20 @@ export const getRelatedJobs = async (req, res, next) => {
 // Existing functions (keeping for backward compatibility)
 export const getFilterOptions = async (req, res, next) => {
   try {
-    // Get unique locations
-    const locations = await Job.distinct("location");
+    // Lấy danh sách location duy nhất từ DB
+    const rawLocations = await Job.distinct("location");
 
-    // Get unique positions
+    // Lấy phần sau dấu ',' cuối cùng
+    const locations = rawLocations
+      .map((loc) => {
+        if (typeof loc !== "string") return "";
+        const parts = loc.split(",");
+        return parts[parts.length - 1].trim(); // phần sau dấu ',' cuối cùng
+      })
+      .filter((loc) => loc) // bỏ rỗng
+      .filter((value, index, self) => self.indexOf(value) === index); // lọc trùng
+
+    // Các filter khác giữ nguyên
     const positions = await Job.distinct("position");
 
     // Get unique industries
@@ -1375,6 +1385,80 @@ export const getYearlyJobStats = async (req, res) => {
   } catch (error) {
     console.error("Error getting yearly job stats:", error);
     res.status(500).json({ message: "Failed to fetch yearly job stats" });
+  }
+};
+
+// Job Status Distribution
+export const getJobStatusDistribution = async (req, res) => {
+  try {
+    const stats = await Job.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    const result = {};
+    stats.forEach(({ _id, count }) => {
+      result[_id] = count;
+    });
+    res.json({ data: result });
+  } catch (err) {
+    console.error("Error fetching job status distribution:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Jobs by Category
+export const getJobsByCategory = async (req, res) => {
+  try {
+    const stats = await Job.aggregate([
+      {
+        $group: {
+          _id: "$industry",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    res.json({
+      data: stats.map(({ _id, count }) => ({
+        category: _id || "Uncategorized",
+        count
+      }))
+    });
+  } catch (err) {
+    console.error("Error fetching jobs by category:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Jobs Posted Over Time (by month, all years)
+export const getJobsPostedOverTime = async (req, res) => {
+  try {
+    const stats = await Job.aggregate([
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { "_id.year": 1, "_id.month": 1 }
+      }
+    ]);
+    const result = {};
+    stats.forEach(({ _id, count }) => {
+      const key = `${_id.year}-${String(_id.month).padStart(2, "0")}`;
+      result[key] = count;
+    });
+    res.json({ data: result });
+  } catch (err) {
+    console.error("Error fetching jobs posted over time:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

@@ -39,6 +39,9 @@ import {
   validateUpdateJobStatus,
   validateUpdateApplicationStatus,
   getAIRecommendedJobs,
+  getJobStatusDistribution,
+  getJobsByCategory,
+  getJobsPostedOverTime,
 } from "../controllers/job.controller.js";
 import { authenticate, authorizeAdmin } from "../middlewares/auth.middleware.js";
 
@@ -72,6 +75,27 @@ jobRouter.get("/stats/quarterly",authenticate, authorizeAdmin, getQuarterlyJobSt
  * Allowed Roles: Admin
  */
 jobRouter.get("/stats/yearly",authenticate, authorizeAdmin, getYearlyJobStats);
+
+/**
+ * GET /api/v1/job/stats/status-distribution
+ * Get job status distribution for admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/status-distribution", authenticate, authorizeAdmin, getJobStatusDistribution);
+
+/**
+ * GET /api/v1/job/stats/by-category
+ * Get jobs by category for admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/by-category", authenticate, authorizeAdmin, getJobsByCategory);
+
+/**
+ * GET /api/v1/job/stats/posted-over-time
+ * Get jobs posted over time (by month, all years)
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/posted-over-time", authenticate, authorizeAdmin, getJobsPostedOverTime);
 
 // ===== BASIC CRUD OPERATIONS =====
 
