@@ -9,7 +9,6 @@ import ApplicantProfile from "../models/applicantProfile.model.js";
 import { body, param, validationResult } from "express-validator";
 import JobCategory from "../models/jobCategory.model.js";
 import { Types } from "mongoose";
-import check from "check-types";
 import { jobCategoriesRecursiveRoutine } from "./jobCategory.controller.js";
 
 /**
@@ -268,12 +267,13 @@ export const viewJobDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Find job and increment view count
-    const job = await Job.findByIdAndUpdate(
-      id,
-      { $inc: { views: 1 } },
-      { new: true },
-    );
+    // Increment view count
+    await Job.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+
+    // Find and populate
+    const job = await Job.findById(req.params.id)
+      .populate("categoryId")
+      .populate("skills");
 
     if (!job) {
       return res.status(404).json({
@@ -314,6 +314,7 @@ export const viewJobDetail = async (req, res, next) => {
         position: job.position,
         location: job.location,
         keywords: job.keywords,
+        categoryId: job.categoryId,
         skills: job.skills,
         views: job.views,
         status: job.status,
@@ -1325,14 +1326,7 @@ export const validateCreateJob = [
     .trim()
     .matches(/^[0-9]+$/u)
     .withMessage("salaryRangeEnd must be a valid number"),
-  body("salaryRangeUnit")
-    .optional()
-    .custom((value) => {
-      if (check.contains(salaryRangeUnitEnum, value)) return true;
-      throw new Error(
-        `salaryRangeUnit must be a value of salaryRangeUnit enum (${JSON.stringify(salaryRangeUnitEnum)})`,
-      );
-    }),
+  body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),
   body("deliveryTime").optional(),
   body("priorityLevel")
     .optional()
@@ -1370,7 +1364,20 @@ export const validateCreateJob = [
     .optional()
     .isArray()
     .withMessage("Keywords must be an array"),
-  body("skills").optional().isArray().withMessage("Skills must be an array"),
+  body("skills")
+    .optional()
+    .isArray()
+    .withMessage("Skills must be an array of skill IDs.")
+    .custom((skills) => {
+      if (skills) {
+        for (const skillId of skills) {
+          if (!mongoose.Types.ObjectId.isValid(skillId)) {
+            throw new Error(`Invalid skill ID provided: ${skillId}`);
+          }
+        }
+      }
+      return true; // Return true if all IDs are valid
+    }),
   body("categoryId").isMongoId().withMessage("Invalid ObjectId format"),
   (req, res, next) => {
     const errors = validationResult(req);
@@ -1387,81 +1394,52 @@ export const validateUpdateJob = [
   param("id").isMongoId().withMessage("Invalid job ID"),
   body("title")
     .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Title cannot be empty")
     .isLength({ min: 5, max: 100 })
-    .withMessage("Title must be 5-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Title must be valid and not random characters"),
+    .withMessage("Title must be 5-100 characters"),
   body("description")
     .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Description cannot be empty")
     .isLength({ min: 20, max: 2000 })
-    .withMessage("Description must be 20-2000 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Description must be valid and not random characters"),
+    .withMessage("Description must be 20-2000 characters"),
   body("requirements")
     .optional()
-    .isLength({ min: 10, max: 1000 })
-    .withMessage("Requirements must be 10-1000 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Requirements must be valid and not random characters"),
-  body("salary")
-    .optional()
-    .isLength({ min: 2, max: 50 })
-    .withMessage("Salary must be 2-50 characters")
-    .matches(/^[0-9]+$/u)
-    .withMessage("Salary must be a valid number"),
-  body("deliveryTime")
-    .optional()
-    .isLength({ min: 2, max: 50 })
-    .withMessage("Delivery time must be 2-50 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Delivery time must be valid and not random characters"),
-  body("priorityLevel")
-    .optional()
-    .isIn(["Nổi bật", "Thông thường"])
-    .withMessage("Invalid priority level"),
-  body("quantity")
-    .optional()
-    .isInt({ min: 1, max: 1000 })
-    .withMessage("Quantity must be a positive integer (1-1000)"),
-  body("level")
-    .optional()
-    .isLength({ min: 2, max: 50 })
-    .withMessage("Level must be 2-50 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Level must be valid and not random characters"),
-  body("industry")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Industry must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Industry must be valid and not random characters"),
-  body("position")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Position must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Position must be valid and not random characters"),
-  body("location")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Location must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Location must be valid and not random characters"),
-  body("experience")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Experience must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Experience must be valid and not random characters"),
-  body("deadline")
-    .optional()
-    .isISO8601()
-    .withMessage("Deadline must be a valid date"),
-  body("keywords")
+    .trim()
+    .notEmpty()
+    .withMessage("Requirements cannot be empty"),
+  body("salary").optional().trim(),
+  body("salaryRange.start").optional().isNumeric(),
+  body("salaryRange.end").optional().isNumeric(),
+  body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),
+  body("deliveryTime").optional(),
+  body("priorityLevel").optional().isIn(["Nổi bật", "Thông thường"]),
+  body("quantity").optional().isInt({ min: 1 }),
+  body("level").optional().isIn(levelEnum),
+  body("industry").optional().trim(),
+  body("position").optional().trim(),
+  body("location").optional().trim(),
+  body("experience").optional().isIn(experienceEnum),
+  body("deadline").optional().isISO8601().toDate(),
+  body("keywords").optional().isArray(),
+  body("skills")
     .optional()
     .isArray()
-    .withMessage("Keywords must be an array"),
-  body("skills").optional().isArray().withMessage("Skills must be an array"),
+    .withMessage("Skills must be an array of skill IDs.")
+    .custom((skills) => {
+      if (skills) {
+        for (const skillId of skills) {
+          if (!mongoose.Types.ObjectId.isValid(skillId)) {
+            throw new Error(`Invalid skill ID provided: ${skillId}`);
+          }
+        }
+      }
+      return true;
+    }),
+  body("categoryId").optional().isMongoId().withMessage("Invalid category ID."),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
