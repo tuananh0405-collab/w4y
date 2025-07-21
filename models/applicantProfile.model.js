@@ -7,22 +7,28 @@ const applicantProfileSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
-  jobTitle: { type: String, default: '' },   // Thêm trường chức danh
+  jobTitle: { type: String, default: "" }, // Thêm trường chức danh
   education: String,
-  skills: [String],
+  skillIds: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "JobSkill",
+    },
+  ],
   experience: String,
-  resumeFiles: [  // Thay đổi ở đây: mảng chứa nhiều file
+  resumeFiles: [
+    // Thay đổi ở đây: mảng chứa nhiều file
     {
       path: String,
       contentType: String,
-      uploadedAt: { type: Date, default: Date.now }  // có thể thêm trường thời gian upload
-    }
+      uploadedAt: { type: Date, default: Date.now }, // có thể thêm trường thời gian upload
+    },
   ],
 });
 
- const ApplicantProfile = mongoose.model(
+const ApplicantProfile = mongoose.model(
   "ApplicantProfile",
-  applicantProfileSchema
+  applicantProfileSchema,
 );
 
 export default ApplicantProfile;
