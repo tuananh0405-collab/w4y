@@ -8,9 +8,7 @@ const applicantProfileSchema = new mongoose.Schema({
     required: true,
   },
   jobTitle: { type: String, default: '' },   // Thêm trường chức danh
-  education: String,
   skills: [String],
-  experience: String,
   resumeFiles: [  // Thay đổi ở đây: mảng chứa nhiều file
     {
       path: String,
@@ -18,6 +16,30 @@ const applicantProfileSchema = new mongoose.Schema({
       uploadedAt: { type: Date, default: Date.now }  // có thể thêm trường thời gian upload
     }
   ],
+  userDetail: String,
+  level: String,
+  education: [
+    {
+      school: String,
+      fieldOfStudy: String,
+      startDate: Date,
+      endDate: Date
+    }
+  ],
+  experience: [
+    {
+      company: String,
+      position: String,
+      startDate: Date,
+      endDate: Date
+    }
+  ],
+  openToWork: Boolean,
+  timeWork: {
+    type: String,
+    enum: ["full-time", "part-time", "freelance"],
+    default: "full-time"
+  }
 });
 
  const ApplicantProfile = mongoose.model(
