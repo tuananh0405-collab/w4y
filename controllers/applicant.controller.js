@@ -216,7 +216,30 @@ export const deleteUploadedCV = async (req, res, next) => {
 };
 
 // Lấy thông tin hồ sơ của ứng viên
-export const getProfile = (req, res, next) => {};
+export const getProfile = async (req, res, next) => {
+  try {
+    const profile = await ApplicantProfile.findOne({ userId: req.user._id });
+    
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Applicant profile not found"
+      });
+    }
+
+    const populatedProfile = await profile.populate({
+      path: 'userId',
+      select: 'name email phone city'
+    });
+
+    res.status(200).json({
+      success: true,
+      data: populatedProfile
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // Đếm số dự án đã ứng tuyển của applicant hiện tại
 export const countApplicationsByApplicant = async (req, res, next) => {
