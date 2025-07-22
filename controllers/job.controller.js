@@ -11,7 +11,12 @@ import JobCategory from "../models/jobCategory.model.js";
 import { Types } from "mongoose";
 import { jobCategoriesRecursiveRoutine } from "./jobCategory.controller.js";
 import { isChromaConnected } from "../database/chromadb.js";
-import { addOrUpdateJobInChroma, deleteJobFromChroma, queryJobsFromChroma } from "../services/chroma.service.js";
+import {
+  addOrUpdateJobInChroma,
+  deleteJobFromChroma,
+  queryJobsFromChroma,
+} from "../services/chroma.service.js";
+import check from "check-types";
 
 /**
  * POST /api/v1/job
@@ -34,6 +39,8 @@ export const createJobPosting = async (req, res, next) => {
       description,
       requirements,
       salary,
+      salaryRange,
+      salaryRangeUnit,
       deliveryTime,
       priorityLevel,
       quantity,
@@ -54,7 +61,6 @@ export const createJobPosting = async (req, res, next) => {
       title: typeof title === "string" ? title.trim() : "",
       description: typeof description === "string" ? description.trim() : "",
       requirements: typeof requirements === "string" ? requirements.trim() : "",
-      salary: typeof salary === "string" ? salary.trim() : "",
       deliveryTime:
         typeof deliveryTime === "string" ? deliveryTime.trim() : deliveryTime,
       priorityLevel,
@@ -71,6 +77,21 @@ export const createJobPosting = async (req, res, next) => {
       status: "active",
       categoryId: Types.ObjectId.createFromHexString(categoryId),
     };
+
+    // The "must provide either salary string or salaryRange" validation condition only applies to the endpoint (only enforced by the validator middleware). You can provide neither salary string nor salary range here, I don't really care.
+    if (check.nonEmptyString(salary)) {
+      jobData.salary = salary;
+    }
+
+    if (
+      check.all(
+        check.map(salaryRange, { start: check.number, end: check.number }),
+      ) &&
+      check.in(salaryRangeUnit, salaryRangeUnitEnum)
+    ) {
+      jobData.salaryRange = salaryRange;
+      jobData.salaryRangeUnit = salaryRangeUnit;
+    }
 
     // Create new job
     const newJob = new Job(jobData);
@@ -197,21 +218,30 @@ export const viewJobList = async (req, res, next) => {
         salaryRangeFilter["$or"] = [
           {
             salaryRangeUnit: salaryRangeUnit,
+            // Both are gte because I figured that when you're filtering for salaryRange, you are asking for jobs that offer at least salaryRange.start and more in amount, and at most salaryRange.end and more in amount
+            // idk, might be subject to changes
             ...(salaryRangeStart
-              ? { salaryRangeStart: { $gte: parseInt(salaryRangeStart) } }
+              ? { "salaryRange.start": { $gte: parseInt(salaryRangeStart) } }
               : {}),
             ...(salaryRangeEnd
-              ? { salaryRangeEnd: { $gte: parseInt(salaryRangeEnd) } }
+              ? { "salaryRange.end": { $gte: parseInt(salaryRangeEnd) } }
               : {}),
           },
           {
             $and: [
-              { salaryRangeStart: { $exists: false } },
-              { salaryRangeEnd: { $exists: false } },
+              { "salaryRange.start": { $exists: false } },
+              { "salaryRange.end": { $exists: false } },
             ],
           },
         ];
       }
+    }
+
+    let sortOptions = { createdAt: -1, priorityLevel: -1 };
+
+    // If a salary range filter is applied, prioritize jobs with a defined salary range.
+    if (salaryRangeUnit) {
+      sortOptions = { "salaryRange.start": -1, ...sortOptions };
     }
 
     // Pagination
@@ -219,7 +249,7 @@ export const viewJobList = async (req, res, next) => {
 
     // Get jobs with pagination
     const jobs = await Job.find({ $and: [filter, salaryRangeFilter] })
-      .sort({ createdAt: -1, priorityLevel: -1 })
+      .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
 
@@ -239,6 +269,8 @@ export const viewJobList = async (req, res, next) => {
           description: job.description,
           requirements: job.requirements,
           salary: job.salary,
+          salaryRange: job.salaryRange,
+          salaryRangeUnit: job.salaryRangeUnit,
           deliveryTime: job.deliveryTime,
           priorityLevel: job.priorityLevel,
           createdAt: job.createdAt,
@@ -316,6 +348,8 @@ export const viewJobDetail = async (req, res, next) => {
         requirements: job.requirements,
         experience: job.experience,
         salary: job.salary,
+        salaryRange: job.salaryRange,
+        salaryRangeUnit: job.salaryRangeUnit,
         deliveryTime: job.deliveryTime,
         priorityLevel: job.priorityLevel,
         createdAt: job.createdAt,
@@ -904,15 +938,20 @@ export const getRecommendedJobs = async (req, res, next) => {
           employerName: employer?.name,
           title: job.title,
           description: job.description,
+          requirements: job.requirements,
           salary: job.salary,
+          salaryRange: job.salaryRange,
+          salaryRangeUnit: job.salaryRangeUnit,
+          deliveryTime: job.deliveryTime,
+          priorityLevel: job.priorityLevel,
+          createdAt: job.createdAt,
           location: job.location,
           experience: job.experience,
           industry: job.industry,
           position: job.position,
           level: job.level,
-          priorityLevel: job.priorityLevel,
-          createdAt: job.createdAt,
-          deadline: job.deadline,
+          views: job.views,
+          status: job.status,
         };
       }),
     );
@@ -943,8 +982,9 @@ export const getAIRecommendedJobs = async (req, res, next) => {
     }
 
     // 2. Get applicant profile and populate their skills
-    const profile = await ApplicantProfile.findOne({ userId: req.user._id })
-      .populate("skillIds", "name"); // Assumes profile has 'skillIds' ref to JobSkill
+    const profile = await ApplicantProfile.findOne({
+      userId: req.user._id,
+    }).populate("skillIds", "name"); // Assumes profile has 'skillIds' ref to JobSkill
 
     if (!profile) {
       return res.status(200).json({
@@ -955,7 +995,8 @@ export const getAIRecommendedJobs = async (req, res, next) => {
     }
 
     // 3. Construct a query text from the user's profile for ChromaDB
-    const skillNames = profile.skillIds?.map((skill) => skill.name).join(", ") || "none";
+    const skillNames =
+      profile.skillIds?.map((skill) => skill.name).join(", ") || "none";
     const queryText = `Title: ${profile.jobTitle || ""}. Skills: ${skillNames}.`;
 
     // 4. Query ChromaDB to get the most relevant job IDs
@@ -977,8 +1018,12 @@ export const getAIRecommendedJobs = async (req, res, next) => {
     }).populate("employerId", "name");
 
     // 6. Sort the MongoDB results to match the relevance order from ChromaDB
-    const jobMap = new Map(jobsFromMongo.map(job => [job._id.toString(), job]));
-    const sortedJobs = recommendedJobIds.map(id => jobMap.get(id)).filter(Boolean);
+    const jobMap = new Map(
+      jobsFromMongo.map((job) => [job._id.toString(), job]),
+    );
+    const sortedJobs = recommendedJobIds
+      .map((id) => jobMap.get(id))
+      .filter(Boolean);
 
     // 7. Format the final response
     const formattedJobs = sortedJobs.map((job) => ({
@@ -986,12 +1031,20 @@ export const getAIRecommendedJobs = async (req, res, next) => {
       employerName: job.employerId?.name,
       title: job.title,
       description: job.description,
+      requirements: job.requirements,
       salary: job.salary,
+      salaryRange: job.salaryRange,
+      salaryRangeUnit: job.salaryRangeUnit,
+      deliveryTime: job.deliveryTime,
+      priorityLevel: job.priorityLevel,
+      createdAt: job.createdAt,
       location: job.location,
       experience: job.experience,
+      industry: job.industry,
+      position: job.position,
       level: job.level,
-      createdAt: job.createdAt,
-      deadline: job.deadline,
+      views: job.views,
+      status: job.status,
     }));
 
     res.status(200).json({
@@ -1395,9 +1448,9 @@ export const getJobStatusDistribution = async (req, res) => {
       {
         $group: {
           _id: "$status",
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
     const result = {};
     stats.forEach(({ _id, count }) => {
@@ -1417,15 +1470,15 @@ export const getJobsByCategory = async (req, res) => {
       {
         $group: {
           _id: "$industry",
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
     res.json({
       data: stats.map(({ _id, count }) => ({
         category: _id || "Uncategorized",
-        count
-      }))
+        count,
+      })),
     });
   } catch (err) {
     console.error("Error fetching jobs by category:", err);
@@ -1441,14 +1494,14 @@ export const getJobsPostedOverTime = async (req, res) => {
         $group: {
           _id: {
             year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" }
+            month: { $month: "$createdAt" },
           },
-          count: { $sum: 1 }
-        }
+          count: { $sum: 1 },
+        },
       },
       {
-        $sort: { "_id.year": 1, "_id.month": 1 }
-      }
+        $sort: { "_id.year": 1, "_id.month": 1 },
+      },
     ]);
     const result = {};
     stats.forEach(({ _id, count }) => {
@@ -1485,40 +1538,38 @@ export const validateCreateJob = [
     .notEmpty()
     .withMessage("Requirements are required"),
 
-  body([
-    "salary",
-    "salaryRangeStart",
-    "salaryRangeEnd",
-    "salaryRangeUnit",
-  ]).custom((value, { req }) => {
-    if (
-      req.body.salary ||
-      (req.body.salaryRangeStart &&
-        req.body.salaryRangeEnd &&
-        req.body.salaryRangeUnit)
-    ) {
+  // Validate business rule
+  // Ensure that either salary (string) or salaryRange (salaryRange.start, salaryRange.end, and salaryRangeUnit) is provided
+  body("salary").custom((value, { req }) => {
+    const { salary, salaryRange, salaryRangeUnit } = req.body;
+    const hasTextSalary = check.nonEmptyString(salary);
+
+    // If req.body.salaryRange have both the start end end field (both must not be undefined or null)
+    const hasValidSalaryRange =
+      check.all(
+        check.map(salaryRange, {
+          start: check.assigned,
+          end: check.assigned,
+        }),
+      ) && check.assigned(salaryRangeUnit);
+
+    if (hasTextSalary || hasValidSalaryRange) {
       return true;
     }
     throw new Error(
-      "Either salary or salaryRange (salaryRangeStart, salaryRangeEnd, and salaryRangeUnit) must be provided",
+      "Either salary (string) or a complete salaryRange (object with start/end, alongside salaryRangeUnit) must be provided",
     );
   }),
+
   body("salary")
     .optional()
     .trim()
     .isLength({ min: 2, max: 50 })
     .withMessage("Salary must be 2-50 characters"),
-  body("salaryRangeStart")
-    .optional()
-    .trim()
-    .matches(/^[0-9]+$/u)
-    .withMessage("salaryRangeStart must be a valid number"),
-  body("salaryRangeEnd")
-    .optional()
-    .trim()
-    .matches(/^[0-9]+$/u)
-    .withMessage("salaryRangeEnd must be a valid number"),
+  body("salaryRange.start").optional().isNumeric().toInt(), // parses
+  body("salaryRange.end").optional().isNumeric().toInt(), // parses
   body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),
+
   body("deliveryTime").optional(),
   body("priorityLevel")
     .optional()
@@ -1603,7 +1654,11 @@ export const validateUpdateJob = [
     .trim()
     .notEmpty()
     .withMessage("Requirements cannot be empty"),
-  body("salary").optional().trim(),
+  body("salary")
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Salary must be 2-50 characters"),
   body("salaryRange.start").optional().isNumeric(),
   body("salaryRange.end").optional().isNumeric(),
   body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),

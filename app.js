@@ -25,6 +25,7 @@ import jobCategoryRouter from "./routes/jobCategory.routes.js";
 import jobSkillRouter from "./routes/jobSkill.routes.js";
 import { connectToChromaDB } from "./database/chromadb.js";
 import { syncAllJobsToChroma } from "./services/chroma.service.js";
+import check from "check-types";
 
 // Thêm đoạn này để lấy __dirname trong ES module
 const __filename = fileURLToPath(import.meta.url);
