@@ -54,8 +54,8 @@ export const getUser = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Tìm ApplicantProfile theo userId lấy skills, education
-    const profile = await ApplicantProfile.findOne({ userId }).select('skills education jobTitle resumeFiles');
+    // Tìm ApplicantProfile theo userId lấy skillIds, education
+    const profile = await ApplicantProfile.findOne({ userId }).select('skillIds education jobTitle resumeFiles');
 
     res.status(200).json({
       success: true,
@@ -63,7 +63,7 @@ export const getUser = async (req, res, next) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
-        skills: profile?.skills || [],
+        skillIds: profile?.skillIds || [],
         education: profile?.education || '',
         jobTitle: profile?.jobTitle || '',
         resumeFiles: profile?.resumeFiles || [],
@@ -178,14 +178,14 @@ export const updateUserProfile = async (req, res, next) => {
 
     await user.save();
 
-    // Cập nhật hoặc tạo ApplicantProfile (skills, jobTitle)
+    // Cập nhật hoặc tạo ApplicantProfile (skillIds, jobTitle)
     let profile = await ApplicantProfile.findOne({ userId });
     if (!profile) {
       profile = new ApplicantProfile({ userId });
     }
 
     profile.jobTitle = req.body.jobTitle || profile.jobTitle;
-    profile.skills = req.body.skills || profile.skills; // expects array of strings
+    profile.skillIds = req.body.skillIds || profile.skillIds;
 
     await profile.save();
 
@@ -201,7 +201,7 @@ export const updateUserProfile = async (req, res, next) => {
         },
         profile: {
           jobTitle: profile.jobTitle,
-          skills: profile.skills,
+          skillIds: profile.skillIds,
         }
       }
     });

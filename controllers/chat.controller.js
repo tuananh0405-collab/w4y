@@ -48,7 +48,7 @@ export const getMessages = async (req, res, next) => {
         pagination: {
           currentPage: pageNum,
           totalPages: 0,
-          totalJobs: 0,
+          totalItems: 0,
           hasNextPage: false,
           hasPrevPage: false,
         },
@@ -64,7 +64,7 @@ export const getMessages = async (req, res, next) => {
         pagination: {
           currentPage: pageNum,
           totalPages: 0,
-          totalJobs: 0,
+          totalItems: 0,
           hasNextPage: false,
           hasPrevPage: false,
         },
@@ -79,8 +79,8 @@ export const getMessages = async (req, res, next) => {
       ],
     };
 
-    const totalJobs = await ChatMessage.countDocuments(chatQuery);
-    const totalPages = Math.ceil(totalJobs / limitNum);
+    const totalItems = await ChatMessage.countDocuments(chatQuery);
+    const totalPages = Math.ceil(totalItems / limitNum);
     const hasNextPage = pageNum < totalPages;
     const hasPrevPage = pageNum > 1;
 
@@ -96,7 +96,7 @@ export const getMessages = async (req, res, next) => {
       pagination: {
         currentPage: pageNum,
         totalPages,
-        totalJobs,
+        totalItems,
         hasNextPage,
         hasPrevPage,
       },

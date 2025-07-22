@@ -38,8 +38,10 @@ import {
   validateUpdateJob,
   validateUpdateJobStatus,
   validateUpdateApplicationStatus,
-  getJobCategoriesByParent,
-  getJobCategoriesRecursive,
+  getAIRecommendedJobs,
+  getJobStatusDistribution,
+  getJobsByCategory,
+  getJobsPostedOverTime,
 } from "../controllers/job.controller.js";
 import { authenticate, authorizeAdmin } from "../middlewares/auth.middleware.js";
 
@@ -74,6 +76,27 @@ jobRouter.get("/stats/quarterly",authenticate, authorizeAdmin, getQuarterlyJobSt
  */
 jobRouter.get("/stats/yearly",authenticate, authorizeAdmin, getYearlyJobStats);
 
+/**
+ * GET /api/v1/job/stats/status-distribution
+ * Get job status distribution for admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/status-distribution", authenticate, authorizeAdmin, getJobStatusDistribution);
+
+/**
+ * GET /api/v1/job/stats/by-category
+ * Get jobs by category for admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/by-category", authenticate, authorizeAdmin, getJobsByCategory);
+
+/**
+ * GET /api/v1/job/stats/posted-over-time
+ * Get jobs posted over time (by month, all years)
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/posted-over-time", authenticate, authorizeAdmin, getJobsPostedOverTime);
+
 // ===== BASIC CRUD OPERATIONS =====
 
 /**
@@ -99,10 +122,17 @@ jobRouter.get("/overview",authenticate, authorizeAdmin, getJobOverview);
 
 /**
  * GET /api/v1/job/recommended
- * Get AI-recommended jobs for the logged-in applicant
+ * Get filter-based job recommendations for the logged-in applicant
  * Allowed Roles: Applicant
  */
 jobRouter.get("/recommended", authenticate, getRecommendedJobs);
+
+/**
+ * GET /api/v1/job/ai-recommended
+ * Get AI-powered job recommendations for the logged-in applicant using ChromaDB.
+ * Allowed Roles: Applicant
+ */
+jobRouter.get("/ai-recommended", authenticate, getAIRecommendedJobs);
 
 /**
  * GET /api/v1/job/expired
@@ -117,14 +147,6 @@ jobRouter.get("/expired", authenticate, getExpiredJobs);
  * Allowed Roles: All
  */
 jobRouter.get("/filter-options", getFilterOptions);
-
-/**
- * GET /api/v1/job/categories-by-parent
- * Get job categories by parent ID
- * Allowed Roles: All
- */
-jobRouter.get("/job-categories/:parentId", getJobCategoriesByParent);
-jobRouter.get("/job-categories-recursive/:categoryId", getJobCategoriesRecursive);
 
 /**
  * GET /api/v1/job/:id
