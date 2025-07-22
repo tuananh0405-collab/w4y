@@ -70,6 +70,7 @@ import { buildMongoFilters } from "../../utils/buildMongoFilters.js";
 describe("User Controller", () => {
   let req, res, next;
   let mockUser, mockProfile;
+  let consoleSpy;
 
   beforeEach(() => {
     req = {
@@ -84,6 +85,12 @@ describe("User Controller", () => {
       json: jest.fn(),
     };
     next = jest.fn();
+
+    // Mock console methods to prevent log pollution in tests
+    consoleSpy = {
+      log: jest.spyOn(console, 'log').mockImplementation(() => {}),
+      error: jest.spyOn(console, 'error').mockImplementation(() => {})
+    };
 
     mockUser = {
       _id: "user123",
@@ -129,6 +136,12 @@ describe("User Controller", () => {
     // Don't reassign cloudinary.uploader.destroy here since it's already mocked
     generateEmailTemplate.mockReturnValue("<html>Reset email</html>");
     buildMongoFilters.mockReturnValue({});
+  });
+
+  afterEach(() => {
+    // Restore console methods
+    consoleSpy.log.mockRestore();
+    consoleSpy.error.mockRestore();
   });
 
   describe("getUser", () => {
@@ -376,8 +389,9 @@ describe("User Controller", () => {
     });
 
     it("should handle invalid token", async () => {
+      const error = new Error("Invalid token");
       jwt.verify.mockImplementation(() => {
-        throw new Error("Invalid token");
+        throw error;
       });
 
       await resetPassword(req, res);
@@ -386,6 +400,7 @@ describe("User Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Error",
       });
+      expect(consoleSpy.log).toHaveBeenCalledWith(error);
     });
 
     it("should handle user not found (but this won't happen in real implementation)", async () => {
@@ -400,6 +415,7 @@ describe("User Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Error",
       });
+      expect(consoleSpy.log).toHaveBeenCalled();
     });
   });
 
@@ -488,7 +504,8 @@ describe("User Controller", () => {
     });
 
     it("should handle database errors", async () => {
-      User.countDocuments.mockRejectedValue(new Error("Database error"));
+      const error = new Error("Database error");
+      User.countDocuments.mockRejectedValue(error);
 
       await getTotalUserCount(req, res);
 
@@ -496,6 +513,7 @@ describe("User Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Server error",
       });
+      expect(consoleSpy.error).toHaveBeenCalledWith(error);
     });
   });
 
@@ -514,7 +532,8 @@ describe("User Controller", () => {
     });
 
     it("should handle database errors", async () => {
-      User.countDocuments.mockRejectedValue(new Error("Database error"));
+      const error = new Error("Database error");
+      User.countDocuments.mockRejectedValue(error);
 
       await getUserRoleCounts(req, res);
 
@@ -522,6 +541,7 @@ describe("User Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Server error",
       });
+      expect(consoleSpy.error).toHaveBeenCalledWith(error);
     });
   });
 
@@ -592,7 +612,8 @@ describe("User Controller", () => {
     });
 
     it("should handle database errors", async () => {
-      User.aggregate.mockRejectedValue(new Error("Database error"));
+      const error = new Error("Database error");
+      User.aggregate.mockRejectedValue(error);
 
       await getQuarterlyUserGrowth(req, res);
 
@@ -629,7 +650,8 @@ describe("User Controller", () => {
     });
 
     it("should handle database errors", async () => {
-      User.aggregate.mockRejectedValue(new Error("Database error"));
+      const error = new Error("Database error");
+      User.aggregate.mockRejectedValue(error);
 
       await getYearlyUserGrowth(req, res);
 
@@ -675,7 +697,8 @@ describe("User Controller", () => {
     });
 
     it("should handle database errors", async () => {
-      User.countDocuments.mockRejectedValue(new Error("Database error"));
+      const error = new Error("Database error");
+      User.countDocuments.mockRejectedValue(error);
 
       await getUserList(req, res);
 
@@ -683,6 +706,7 @@ describe("User Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Server error",
       });
+      expect(consoleSpy.error).toHaveBeenCalledWith(error);
     });
   });
 
@@ -701,7 +725,8 @@ describe("User Controller", () => {
     });
 
     it("should handle database errors", async () => {
-      User.aggregate.mockRejectedValue(new Error("Database error"));
+      const error = new Error("Database error");
+      User.aggregate.mockRejectedValue(error);
 
       await getTopCities(req, res);
 
@@ -709,6 +734,7 @@ describe("User Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Server error",
       });
+      expect(consoleSpy.error).toHaveBeenCalledWith(error);
     });
   });
 
@@ -727,7 +753,8 @@ describe("User Controller", () => {
     });
 
     it("should handle database errors", async () => {
-      User.aggregate.mockRejectedValue(new Error("Database error"));
+      const error = new Error("Database error");
+      User.aggregate.mockRejectedValue(error);
 
       await getAgeGenderPyramid(req, res);
 
@@ -735,6 +762,7 @@ describe("User Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Server error",
       });
+      expect(consoleSpy.error).toHaveBeenCalledWith(error);
     });
   });
 

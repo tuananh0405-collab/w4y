@@ -10,6 +10,7 @@ jest.mock("../../models/jobCategory.model.js");
 
 describe("JobCategory Controller", () => {
   let req, res, next;
+  let consoleSpy;
 
   beforeEach(() => {
     req = { body: {}, params: {}, query: {} };
@@ -19,10 +20,18 @@ describe("JobCategory Controller", () => {
     // Reset all mocks completely
     jest.clearAllMocks();
     
+    // Mock console.error to prevent log pollution in tests
+    consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    
     // Ensure JobCategory methods are properly mocked
     JobCategory.find = jest.fn();
     JobCategory.findById = jest.fn();
     JobCategory.prototype.save = jest.fn();
+  });
+
+  afterEach(() => {
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 
   describe("getJobCategoriesByParent", () => {
@@ -206,6 +215,7 @@ describe("JobCategory Controller", () => {
       expect(next).toHaveBeenCalledWith(error);
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(error);
     });
 
     it("should handle when category not found", async () => {

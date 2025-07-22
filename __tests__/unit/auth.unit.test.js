@@ -45,6 +45,7 @@ import passport from "../../config/passport.js";
 describe("Auth Controller", () => {
   let req, res, next;
   let mockUser;
+  let consoleSpy;
 
   beforeEach(() => {
     req = { body: {}, params: {}, query: {}, cookies: {} };
@@ -55,6 +56,12 @@ describe("Auth Controller", () => {
       redirect: jest.fn()
     };
     next = jest.fn();
+
+    // Mock console methods to prevent log pollution in tests
+    consoleSpy = {
+      log: jest.spyOn(console, 'log').mockImplementation(() => {}),
+      error: jest.spyOn(console, 'error').mockImplementation(() => {})
+    };
     
     mockUser = {
       _id: "user123",
@@ -84,6 +91,12 @@ describe("Auth Controller", () => {
     jwt.sign = jest.fn();
     transporter.sendMail = jest.fn();
     passport.authenticate = jest.fn();
+  });
+
+  afterEach(() => {
+    // Restore console methods
+    consoleSpy.log.mockRestore();
+    consoleSpy.error.mockRestore();
   });
 
   describe("signUp", () => {
@@ -456,8 +469,9 @@ describe("Auth Controller", () => {
     });
 
     it("should return error if refresh token invalid", async () => {
+      const error = new Error("Invalid token");
       jwt.verify.mockImplementation(() => {
-        throw new Error("Invalid token");
+        throw error;
       });
 
       await refreshToken(req, res, next);
@@ -466,6 +480,7 @@ describe("Auth Controller", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: "Invalid refresh token"
       });
+      expect(consoleSpy.error).toHaveBeenCalledWith(error);
     });
 
     it("should return error if user not found", async () => {
