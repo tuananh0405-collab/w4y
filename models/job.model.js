@@ -24,9 +24,9 @@ export const experienceEnum = [
 
 // Salary range unit enum
 export const salaryRangeUnitEnum = [
-  "VND/tháng",
+  "triệu VND/tháng",
+  "triệu VND/năm",
   "USD/tháng",
-  "VND/năm",
   "USD/năm",
 ];
 
