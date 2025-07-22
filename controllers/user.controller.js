@@ -75,7 +75,7 @@ export const getUser = async (req, res, next) => {
   }
 };
 
-export const updateUserByID = async (req, res) => {
+export const updateUserByID = async (req, res, next) => {
   try {
     // Lấy userId từ JWT trong cookie
     const userId = req.user._id;
