@@ -218,23 +218,77 @@ export const deleteUploadedCV = async (req, res, next) => {
 // Lấy thông tin hồ sơ của ứng viên
 export const getProfile = async (req, res, next) => {
   try {
-    const profile = await ApplicantProfile.findOne({ userId: req.user._id });
-    
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: "Applicant profile not found"
+
+    const applicantId = req.user._id; // Lấy applicantId từ JWT
+    const applicantProfile = await ApplicantProfile.findOne({ userId: applicantId }).populate("userId", "name email phone district city");
+
+    if (!applicantProfile) {
+      const newProfile = new ApplicantProfile({
+        userId: applicantId,
+      });
+      await newProfile.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Profile fetched successfully",
+        data: newProfile,
       });
     }
 
-    const populatedProfile = await profile.populate({
-      path: 'userId',
-      select: 'name email phone city'
+    res.status(200).json({
+      success: true,
+      message: "Profile fetched successfully",
+      data: applicantProfile,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// Cập nhật hồ sơ của ứng viên
+export const updateProfile = async (req, res, next) => {
+  try {
+    const {
+      jobTitle,
+      skills,
+      userDetail,
+      level,
+      education,
+      experience,
+      openToWork,
+      timeWork
+    } = req.body;
+
+    const updateData = {
+      jobTitle,
+      skills,
+      userDetail,
+      level,
+      education,
+      experience,
+      openToWork,
+      timeWork
+    };
+
+    const updatedProfile = await ApplicantProfile.findOneAndUpdate(
+      { userId: req.user._id },
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!updatedProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Applicant profile not found",
+      });
+    }
 
     res.status(200).json({
       success: true,
-      data: populatedProfile
+      message: "Profile updated successfully",
+      data: updatedProfile,
+
     });
   } catch (error) {
     next(error);

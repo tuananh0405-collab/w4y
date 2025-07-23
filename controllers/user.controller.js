@@ -49,13 +49,14 @@ export const getUser = async (req, res, next) => {
     const userId = req.user._id;
 
     // Tìm user lấy thông tin cơ bản
-    const user = await User.findById(userId).select('name email phone avatarUrl');
+    const user = await User.findById(userId).select('name email phone city district avatarUrl');
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Tìm ApplicantProfile theo userId lấy skillIds, education
-    const profile = await ApplicantProfile.findOne({ userId }).select('skillIds education jobTitle resumeFiles');
+    // Tìm ApplicantProfile theo userId lấy skills, education
+    const profile = await ApplicantProfile.findOne({ userId }).select('skills education jobTitle resumeFiles userDetail level openToWork timeWork experience');
+
 
     res.status(200).json({
       success: true,
@@ -63,11 +64,18 @@ export const getUser = async (req, res, next) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
-        skillIds: profile?.skillIds || [],
+        city: user.city,
+        district: user.district,
+        skills: profile?.skills || [],
         education: profile?.education || '',
         jobTitle: profile?.jobTitle || '',
         resumeFiles: profile?.resumeFiles || [],
         avatarUrl: user.avatarUrl || '',
+        userDetail: profile?.userDetail || '',
+        level: profile?.level || '',
+        openToWork: profile?.openToWork || '',
+        timeWork: profile?.timeWork || '',
+        experience: profile?.experience || '',
       },
     });
   } catch (error) {
@@ -177,18 +185,6 @@ export const updateUserProfile = async (req, res, next) => {
     user.district = req.body.district || user.district;
 
     await user.save();
-
-    // Cập nhật hoặc tạo ApplicantProfile (skillIds, jobTitle)
-    let profile = await ApplicantProfile.findOne({ userId });
-    if (!profile) {
-      profile = new ApplicantProfile({ userId });
-    }
-
-    profile.jobTitle = req.body.jobTitle || profile.jobTitle;
-    profile.skillIds = req.body.skillIds || profile.skillIds;
-
-    await profile.save();
-
     res.status(200).json({
       success: true,
       data: {
@@ -198,10 +194,6 @@ export const updateUserProfile = async (req, res, next) => {
           phone: user.phone,
           city: user.city,
           district: user.district,
-        },
-        profile: {
-          jobTitle: profile.jobTitle,
-          skillIds: profile.skillIds,
         }
       }
     });
