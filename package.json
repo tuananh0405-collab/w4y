@@ -10,7 +10,10 @@
     "test:unit": "jest --config=__tests__/config/jest.unit.config.cjs --detectOpenHandles --runInBand --forceExit",
     "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules PORT=3004 jest --config=__tests__/config/jest.integration.config.cjs --detectOpenHandles --runInBand --forceExit",
     "test:e2e": "cross-env NODE_OPTIONS=--experimental-vm-modules PORT=3005 jest --config=__tests__/config/jest.e2e.config.cjs --detectOpenHandles --runInBand --forceExit",
-    "test": "npm-run-all --parallel test:unit test:integration test:e2e"
+    "test": "npm-run-all --parallel test:unit test:integration test:e2e",
+    "test:user": "jest __tests__/unit/user.unit.test.js --config=__tests__/config/jest.unit.config.cjs",
+    "test:user:watch": "jest __tests__/unit/user.unit.test.js --config=__tests__/config/jest.unit.config.cjs --watch",
+    "test:user:coverage": "jest __tests__/unit/user.unit.test.js --config=__tests__/config/jest.unit.config.cjs --coverage"
   },
   "keywords": [],
   "author": "",

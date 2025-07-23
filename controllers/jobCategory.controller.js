@@ -65,6 +65,7 @@ export const jobCategoriesRecursiveRoutine = async (categoryId) => {
     };
   } catch (error) {
     console.error(error);
+    throw error; // Re-throw the error so it can be caught by the calling function
   }
 };
 
