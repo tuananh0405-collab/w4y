@@ -13,8 +13,8 @@ const applicantProfileSchema = new mongoose.Schema({
     {
       path: String,
       contentType: String,
-      uploadedAt: { type: Date, default: Date.now }  // có thể thêm trường thời gian upload
-    }
+      uploadedAt: { type: Date, default: Date.now }, // có thể thêm trường thời gian upload
+    },
   ],
   userDetail: String,
   level: String,
@@ -42,9 +42,9 @@ const applicantProfileSchema = new mongoose.Schema({
   }
 });
 
- const ApplicantProfile = mongoose.model(
+const ApplicantProfile = mongoose.model(
   "ApplicantProfile",
-  applicantProfileSchema
+  applicantProfileSchema,
 );
 
 export default ApplicantProfile;

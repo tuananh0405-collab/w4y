@@ -38,8 +38,7 @@ import {
   validateUpdateJob,
   validateUpdateJobStatus,
   validateUpdateApplicationStatus,
-  getJobCategoriesByParent,
-  getJobCategoriesRecursive,
+  getAIRecommendedJobs,
   getJobStatusDistribution,
   getJobsByCategory,
   getJobsPostedOverTime,
@@ -123,10 +122,17 @@ jobRouter.get("/overview",authenticate, authorizeAdmin, getJobOverview);
 
 /**
  * GET /api/v1/job/recommended
- * Get AI-recommended jobs for the logged-in applicant
+ * Get filter-based job recommendations for the logged-in applicant
  * Allowed Roles: Applicant
  */
 jobRouter.get("/recommended", authenticate, getRecommendedJobs);
+
+/**
+ * GET /api/v1/job/ai-recommended
+ * Get AI-powered job recommendations for the logged-in applicant using ChromaDB.
+ * Allowed Roles: Applicant
+ */
+jobRouter.get("/ai-recommended", authenticate, getAIRecommendedJobs);
 
 /**
  * GET /api/v1/job/expired
@@ -141,14 +147,6 @@ jobRouter.get("/expired", authenticate, getExpiredJobs);
  * Allowed Roles: All
  */
 jobRouter.get("/filter-options", getFilterOptions);
-
-/**
- * GET /api/v1/job/categories-by-parent
- * Get job categories by parent ID
- * Allowed Roles: All
- */
-jobRouter.get("/job-categories/:parentId", getJobCategoriesByParent);
-jobRouter.get("/job-categories-recursive/:categoryId", getJobCategoriesRecursive);
 
 /**
  * GET /api/v1/job/:id

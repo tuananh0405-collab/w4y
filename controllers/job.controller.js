@@ -9,6 +9,13 @@ import ApplicantProfile from "../models/applicantProfile.model.js";
 import { body, param, validationResult } from "express-validator";
 import JobCategory from "../models/jobCategory.model.js";
 import { Types } from "mongoose";
+import { jobCategoriesRecursiveRoutine } from "./jobCategory.controller.js";
+import { isChromaConnected } from "../database/chromadb.js";
+import {
+  addOrUpdateJobInChroma,
+  deleteJobFromChroma,
+  queryJobsFromChroma,
+} from "../services/chroma.service.js";
 import check from "check-types";
 
 /**
@@ -32,6 +39,8 @@ export const createJobPosting = async (req, res, next) => {
       description,
       requirements,
       salary,
+      salaryRange,
+      salaryRangeUnit,
       deliveryTime,
       priorityLevel,
       quantity,
@@ -42,7 +51,7 @@ export const createJobPosting = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills,
+      skillIds,
       categoryId,
     } = req.body;
 
@@ -52,7 +61,6 @@ export const createJobPosting = async (req, res, next) => {
       title: typeof title === "string" ? title.trim() : "",
       description: typeof description === "string" ? description.trim() : "",
       requirements: typeof requirements === "string" ? requirements.trim() : "",
-      salary: typeof salary === "string" ? salary.trim() : "",
       deliveryTime:
         typeof deliveryTime === "string" ? deliveryTime.trim() : deliveryTime,
       priorityLevel,
@@ -65,10 +73,25 @@ export const createJobPosting = async (req, res, next) => {
         typeof experience === "string" ? experience.trim() : experience,
       deadline,
       keywords,
-      skills,
+      skillIds,
       status: "active",
       categoryId: Types.ObjectId.createFromHexString(categoryId),
     };
+
+    // The "must provide either salary string or salaryRange" validation condition only applies to the endpoint (only enforced by the validator middleware). You can provide neither salary string nor salary range here, I don't really care.
+    if (check.nonEmptyString(salary)) {
+      jobData.salary = salary;
+    }
+
+    if (
+      check.all(
+        check.map(salaryRange, { start: check.number, end: check.number }),
+      ) &&
+      check.in(salaryRangeUnit, salaryRangeUnitEnum)
+    ) {
+      jobData.salaryRange = salaryRange;
+      jobData.salaryRangeUnit = salaryRangeUnit;
+    }
 
     // Create new job
     const newJob = new Job(jobData);
@@ -76,6 +99,16 @@ export const createJobPosting = async (req, res, next) => {
 
     // Get employer information
     const employer = await User.findById(req.user._id).select("name");
+
+    // After sending the response, update the document on ChromaDB
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        // Use setImmediate to avoid blocking the event loop
+        setImmediate(() => {
+          addOrUpdateJobInChroma(newJob._id.toString());
+        });
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -116,7 +149,7 @@ export const viewJobList = async (req, res, next) => {
       location,
       position,
       keywords,
-      skills,
+      skillIds,
       industry,
       categoryIds,
       level,
@@ -174,9 +207,9 @@ export const viewJobList = async (req, res, next) => {
     if (keywords) {
       filter.$text = { $search: keywords };
     }
-    if (skills) {
-      const skillsArray = skills.split(",").map((skill) => skill.trim());
-      filter.skills = { $in: skillsArray };
+    if (skillIds) {
+      const skillsArray = skillIds.split(",").map((skill) => skill.trim());
+      filter.skillIds = { $in: skillsArray };
     }
 
     const salaryRangeFilter = {};
@@ -185,21 +218,30 @@ export const viewJobList = async (req, res, next) => {
         salaryRangeFilter["$or"] = [
           {
             salaryRangeUnit: salaryRangeUnit,
+            // Both are gte because I figured that when you're filtering for salaryRange, you are asking for jobs that offer at least salaryRange.start and more in amount, and at most salaryRange.end and more in amount
+            // idk, might be subject to changes
             ...(salaryRangeStart
-              ? { salaryRangeStart: { $gte: parseInt(salaryRangeStart) } }
+              ? { "salaryRange.start": { $gte: parseInt(salaryRangeStart) } }
               : {}),
             ...(salaryRangeEnd
-              ? { salaryRangeEnd: { $gte: parseInt(salaryRangeEnd) } }
+              ? { "salaryRange.end": { $gte: parseInt(salaryRangeEnd) } }
               : {}),
           },
           {
             $and: [
-              { salaryRangeStart: { $exists: false } },
-              { salaryRangeEnd: { $exists: false } },
+              { "salaryRange.start": { $exists: false } },
+              { "salaryRange.end": { $exists: false } },
             ],
           },
         ];
       }
+    }
+
+    let sortOptions = { createdAt: -1, priorityLevel: -1 };
+
+    // If a salary range filter is applied, prioritize jobs with a defined salary range.
+    if (salaryRangeUnit) {
+      sortOptions = { "salaryRange.start": -1, ...sortOptions };
     }
 
     // Pagination
@@ -207,7 +249,7 @@ export const viewJobList = async (req, res, next) => {
 
     // Get jobs with pagination
     const jobs = await Job.find({ $and: [filter, salaryRangeFilter] })
-      .sort({ createdAt: -1, priorityLevel: -1 })
+      .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
 
@@ -227,6 +269,8 @@ export const viewJobList = async (req, res, next) => {
           description: job.description,
           requirements: job.requirements,
           salary: job.salary,
+          salaryRange: job.salaryRange,
+          salaryRangeUnit: job.salaryRangeUnit,
           deliveryTime: job.deliveryTime,
           priorityLevel: job.priorityLevel,
           createdAt: job.createdAt,
@@ -267,12 +311,13 @@ export const viewJobDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Find job and increment view count
-    const job = await Job.findByIdAndUpdate(
-      id,
-      { $inc: { views: 1 } },
-      { new: true },
-    );
+    // Increment view count
+    await Job.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+
+    // Find and populate
+    const job = await Job.findById(req.params.id)
+      .populate("categoryId")
+      .populate("skillIds");
 
     if (!job) {
       return res.status(404).json({
@@ -303,6 +348,8 @@ export const viewJobDetail = async (req, res, next) => {
         requirements: job.requirements,
         experience: job.experience,
         salary: job.salary,
+        salaryRange: job.salaryRange,
+        salaryRangeUnit: job.salaryRangeUnit,
         deliveryTime: job.deliveryTime,
         priorityLevel: job.priorityLevel,
         createdAt: job.createdAt,
@@ -313,7 +360,8 @@ export const viewJobDetail = async (req, res, next) => {
         position: job.position,
         location: job.location,
         keywords: job.keywords,
-        skills: job.skills,
+        category: job.categoryId,
+        skills: job.skillIds,
         views: job.views,
         status: job.status,
       },
@@ -346,7 +394,7 @@ export const updateJob = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills,
+      skillIds,
     } = req.body;
 
     // Find job
@@ -384,9 +432,19 @@ export const updateJob = async (req, res, next) => {
     if (typeof experience === "string") job.experience = experience.trim();
     if (deadline !== undefined) job.deadline = deadline;
     if (keywords !== undefined) job.keywords = keywords;
-    if (skills !== undefined) job.skills = skills;
+    if (skillIds !== undefined) job.skillIds = skillIds;
 
     const updatedJob = await job.save();
+
+    // After sending the response, update the document on ChromaDB
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        // Use setImmediate to avoid blocking the event loop
+        setImmediate(() => {
+          addOrUpdateJobInChroma(newJob._id.toString());
+        });
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -427,6 +485,14 @@ export const deleteJob = async (req, res, next) => {
 
     // Delete the job
     await Job.findByIdAndDelete(id);
+
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        setImmediate(() => {
+          deleteJobFromChroma(id);
+        });
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -816,7 +882,7 @@ export const trackJobView = async (req, res, next) => {
 
 /**
  * GET /api/v1/job/recommended
- * Get AI-recommended jobs for the logged-in applicant
+ * Get filter-based job recommendations for the logged-in applicant
  * Allowed Roles: Applicant
  */
 export const getRecommendedJobs = async (req, res, next) => {
@@ -854,8 +920,8 @@ export const getRecommendedJobs = async (req, res, next) => {
       ];
     }
 
-    if (profile.skills && profile.skills.length > 0) {
-      recommendationQuery.skills = { $in: profile.skills };
+    if (profile.skillIds && profile.skillIds.length > 0) {
+      recommendationQuery.skillIds = { $in: profile.skillIds };
     }
 
     // Get recommended jobs
@@ -872,15 +938,20 @@ export const getRecommendedJobs = async (req, res, next) => {
           employerName: employer?.name,
           title: job.title,
           description: job.description,
+          requirements: job.requirements,
           salary: job.salary,
+          salaryRange: job.salaryRange,
+          salaryRangeUnit: job.salaryRangeUnit,
+          deliveryTime: job.deliveryTime,
+          priorityLevel: job.priorityLevel,
+          createdAt: job.createdAt,
           location: job.location,
           experience: job.experience,
           industry: job.industry,
           position: job.position,
           level: job.level,
-          priorityLevel: job.priorityLevel,
-          createdAt: job.createdAt,
-          deadline: job.deadline,
+          views: job.views,
+          status: job.status,
         };
       }),
     );
@@ -891,6 +962,98 @@ export const getRecommendedJobs = async (req, res, next) => {
       data: formattedJobs,
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/job/ai-recommended
+ * Get AI-powered job recommendations for the logged-in applicant using ChromaDB.
+ * Allowed Roles: Applicant
+ */
+export const getAIRecommendedJobs = async (req, res, next) => {
+  try {
+    // 1. Check if user is an applicant
+    if (req.user.accountType !== "Ứng Viên") {
+      return res.status(403).json({
+        success: false,
+        message: "Only applicants can get job recommendations",
+      });
+    }
+
+    // 2. Get applicant profile and populate their skills
+    const profile = await ApplicantProfile.findOne({
+      userId: req.user._id,
+    }).populate("skillIds", "name"); // Assumes profile has 'skillIds' ref to JobSkill
+
+    if (!profile) {
+      return res.status(200).json({
+        success: true,
+        message: "No profile found to generate AI recommendations.",
+        data: [],
+      });
+    }
+
+    // 3. Construct a query text from the user's profile for ChromaDB
+    const skillNames =
+      profile.skillIds?.map((skill) => skill.name).join(", ") || "none";
+    const queryText = `Title: ${profile.jobTitle || ""}. Skills: ${skillNames}.`;
+
+    // 4. Query ChromaDB to get the most relevant job IDs
+    const recommendedJobIds = await queryJobsFromChroma(queryText, 10);
+
+    if (!recommendedJobIds || recommendedJobIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Could not find any AI-recommended jobs.",
+        data: [],
+      });
+    }
+
+    // 5. Fetch the full job details from MongoDB for the recommended IDs
+    const jobsFromMongo = await Job.find({
+      _id: { $in: recommendedJobIds },
+      status: "active", // Ensure jobs are active and not hidden
+      isHidden: false,
+    }).populate("employerId", "name");
+
+    // 6. Sort the MongoDB results to match the relevance order from ChromaDB
+    const jobMap = new Map(
+      jobsFromMongo.map((job) => [job._id.toString(), job]),
+    );
+    const sortedJobs = recommendedJobIds
+      .map((id) => jobMap.get(id))
+      .filter(Boolean);
+
+    // 7. Format the final response
+    const formattedJobs = sortedJobs.map((job) => ({
+      id: job._id,
+      employerName: job.employerId?.name,
+      title: job.title,
+      description: job.description,
+      requirements: job.requirements,
+      salary: job.salary,
+      salaryRange: job.salaryRange,
+      salaryRangeUnit: job.salaryRangeUnit,
+      deliveryTime: job.deliveryTime,
+      priorityLevel: job.priorityLevel,
+      createdAt: job.createdAt,
+      location: job.location,
+      experience: job.experience,
+      industry: job.industry,
+      position: job.position,
+      level: job.level,
+      views: job.views,
+      status: job.status,
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "AI-recommended jobs fetched successfully",
+      data: formattedJobs,
+    });
+  } catch (error) {
+    // If this fails, the frontend can call the other /recommended endpoint
     next(error);
   }
 };
@@ -991,9 +1154,9 @@ export const getRelatedJobs = async (req, res, next) => {
       ],
     };
 
-    // Add skills matching if available
-    if (referenceJob.skills && referenceJob.skills.length > 0) {
-      relatedQuery.skills = { $in: referenceJob.skills };
+    // Add skillIds matching if available
+    if (referenceJob.skillIds && referenceJob.skillIds.length > 0) {
+      relatedQuery.skillIds = { $in: referenceJob.skillIds };
     }
 
     // Get related jobs
@@ -1087,74 +1250,6 @@ export const getFilterOptions = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
-  }
-};
-
-// Not actually an existing function! Did not understand why these functions that are still being used are marked as "deprecated", though, so still putting this here
-export const getJobCategoriesByParent = async (req, res, next) => {
-  try {
-    const { parentId } = req.params;
-    let filter;
-    if (Types.ObjectId.isValid(parentId)) {
-      filter = { parentId: Types.ObjectId.createFromHexString(parentId) };
-    } else {
-      filter = { parentId: null };
-    }
-
-    const jobCategories =
-      await JobCategory.find(filter).select("_id name parentId");
-
-    res.status(200).json({
-      success: true,
-      message: `Fetched ${jobCategories.length} job category/categories successfully`,
-      data: jobCategories,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getJobCategoriesRecursive = async (req, res, next) => {
-  try {
-    const { categoryId } = req.params;
-
-    const result = await jobCategoriesRecursiveRoutine(
-      Types.ObjectId.createFromHexString(categoryId),
-    );
-
-    res.status(200).json({
-      success: true,
-      message: `Fetched job category/categories recursively successfully`,
-      data: result,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const jobCategoriesRecursiveRoutine = async (categoryId) => {
-  try {
-    const category = await JobCategory.findById(categoryId)
-      .select("_id name parentId")
-      .lean();
-    if (!category) return null;
-
-    const children = await JobCategory.find({ parentId: categoryId })
-      .select("_id name parentId")
-      .lean();
-
-    const childrenTree = await Promise.all(
-      children
-        .map((child) => jobCategoriesRecursiveRoutine(child._id))
-        .filter((child) => !!child),
-    );
-
-    return {
-      ...category,
-      children: childrenTree,
-    };
-  } catch (error) {
-    console.error(error);
   }
 };
 
@@ -1353,9 +1448,9 @@ export const getJobStatusDistribution = async (req, res) => {
       {
         $group: {
           _id: "$status",
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
     const result = {};
     stats.forEach(({ _id, count }) => {
@@ -1375,15 +1470,15 @@ export const getJobsByCategory = async (req, res) => {
       {
         $group: {
           _id: "$industry",
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
     res.json({
       data: stats.map(({ _id, count }) => ({
         category: _id || "Uncategorized",
-        count
-      }))
+        count,
+      })),
     });
   } catch (err) {
     console.error("Error fetching jobs by category:", err);
@@ -1399,14 +1494,14 @@ export const getJobsPostedOverTime = async (req, res) => {
         $group: {
           _id: {
             year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" }
+            month: { $month: "$createdAt" },
           },
-          count: { $sum: 1 }
-        }
+          count: { $sum: 1 },
+        },
       },
       {
-        $sort: { "_id.year": 1, "_id.month": 1 }
-      }
+        $sort: { "_id.year": 1, "_id.month": 1 },
+      },
     ]);
     const result = {};
     stats.forEach(({ _id, count }) => {
@@ -1443,47 +1538,38 @@ export const validateCreateJob = [
     .notEmpty()
     .withMessage("Requirements are required"),
 
-  body([
-    "salary",
-    "salaryRangeStart",
-    "salaryRangeEnd",
-    "salaryRangeUnit",
-  ]).custom((value, { req }) => {
-    if (
-      req.body.salary ||
-      (req.body.salaryRangeStart &&
-        req.body.salaryRangeEnd &&
-        req.body.salaryRangeUnit)
-    ) {
+  // Validate business rule
+  // Ensure that either salary (string) or salaryRange (salaryRange.start, salaryRange.end, and salaryRangeUnit) is provided
+  body("salary").custom((value, { req }) => {
+    const { salary, salaryRange, salaryRangeUnit } = req.body;
+    const hasTextSalary = check.nonEmptyString(salary);
+
+    // If req.body.salaryRange have both the start end end field (both must not be undefined or null)
+    const hasValidSalaryRange =
+      check.all(
+        check.map(salaryRange, {
+          start: check.assigned,
+          end: check.assigned,
+        }),
+      ) && check.assigned(salaryRangeUnit);
+
+    if (hasTextSalary || hasValidSalaryRange) {
       return true;
     }
     throw new Error(
-      "Either salary or salaryRange (salaryRangeStart, salaryRangeEnd, and salaryRangeUnit) must be provided",
+      "Either salary (string) or a complete salaryRange (object with start/end, alongside salaryRangeUnit) must be provided",
     );
   }),
+
   body("salary")
     .optional()
     .trim()
     .isLength({ min: 2, max: 50 })
     .withMessage("Salary must be 2-50 characters"),
-  body("salaryRangeStart")
-    .optional()
-    .trim()
-    .matches(/^[0-9]+$/u)
-    .withMessage("salaryRangeStart must be a valid number"),
-  body("salaryRangeEnd")
-    .optional()
-    .trim()
-    .matches(/^[0-9]+$/u)
-    .withMessage("salaryRangeEnd must be a valid number"),
-  body("salaryRangeUnit")
-    .optional()
-    .custom((value) => {
-      if (check.contains(salaryRangeUnitEnum, value)) return true;
-      throw new Error(
-        `salaryRangeUnit must be a value of salaryRangeUnit enum (${JSON.stringify(salaryRangeUnitEnum)})`,
-      );
-    }),
+  body("salaryRange.start").optional().isNumeric().toInt(), // parses
+  body("salaryRange.end").optional().isNumeric().toInt(), // parses
+  body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),
+
   body("deliveryTime").optional(),
   body("priorityLevel")
     .optional()
@@ -1521,7 +1607,20 @@ export const validateCreateJob = [
     .optional()
     .isArray()
     .withMessage("Keywords must be an array"),
-  body("skills").optional().isArray().withMessage("Skills must be an array"),
+  body("skillIds")
+    .optional()
+    .isArray()
+    .withMessage("Skills must be an array of skill IDs.")
+    .custom((skillIds) => {
+      if (skillIds) {
+        for (const skillId of skillIds) {
+          if (!Types.ObjectId.isValid(skillId)) {
+            throw new Error(`Invalid skill ID provided: ${skillId}`);
+          }
+        }
+      }
+      return true; // Return true if all IDs are valid
+    }),
   body("categoryId").isMongoId().withMessage("Invalid ObjectId format"),
   (req, res, next) => {
     const errors = validationResult(req);
@@ -1538,81 +1637,56 @@ export const validateUpdateJob = [
   param("id").isMongoId().withMessage("Invalid job ID"),
   body("title")
     .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Title cannot be empty")
     .isLength({ min: 5, max: 100 })
-    .withMessage("Title must be 5-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Title must be valid and not random characters"),
+    .withMessage("Title must be 5-100 characters"),
   body("description")
     .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Description cannot be empty")
     .isLength({ min: 20, max: 2000 })
-    .withMessage("Description must be 20-2000 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Description must be valid and not random characters"),
+    .withMessage("Description must be 20-2000 characters"),
   body("requirements")
     .optional()
-    .isLength({ min: 10, max: 1000 })
-    .withMessage("Requirements must be 10-1000 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Requirements must be valid and not random characters"),
+    .trim()
+    .notEmpty()
+    .withMessage("Requirements cannot be empty"),
   body("salary")
     .optional()
+    .trim()
     .isLength({ min: 2, max: 50 })
-    .withMessage("Salary must be 2-50 characters")
-    .matches(/^[0-9]+$/u)
-    .withMessage("Salary must be a valid number"),
-  body("deliveryTime")
-    .optional()
-    .isLength({ min: 2, max: 50 })
-    .withMessage("Delivery time must be 2-50 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Delivery time must be valid and not random characters"),
-  body("priorityLevel")
-    .optional()
-    .isIn(["Nổi bật", "Thông thường"])
-    .withMessage("Invalid priority level"),
-  body("quantity")
-    .optional()
-    .isInt({ min: 1, max: 1000 })
-    .withMessage("Quantity must be a positive integer (1-1000)"),
-  body("level")
-    .optional()
-    .isLength({ min: 2, max: 50 })
-    .withMessage("Level must be 2-50 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Level must be valid and not random characters"),
-  body("industry")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Industry must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Industry must be valid and not random characters"),
-  body("position")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Position must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Position must be valid and not random characters"),
-  body("location")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Location must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Location must be valid and not random characters"),
-  body("experience")
-    .optional()
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Experience must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Experience must be valid and not random characters"),
-  body("deadline")
-    .optional()
-    .isISO8601()
-    .withMessage("Deadline must be a valid date"),
-  body("keywords")
+    .withMessage("Salary must be 2-50 characters"),
+  body("salaryRange.start").optional().isNumeric(),
+  body("salaryRange.end").optional().isNumeric(),
+  body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),
+  body("deliveryTime").optional(),
+  body("priorityLevel").optional().isIn(["Nổi bật", "Thông thường"]),
+  body("quantity").optional().isInt({ min: 1 }),
+  body("level").optional().isIn(levelEnum),
+  body("industry").optional().trim(),
+  body("position").optional().trim(),
+  body("location").optional().trim(),
+  body("experience").optional().isIn(experienceEnum),
+  body("deadline").optional().isISO8601().toDate(),
+  body("keywords").optional().isArray(),
+  body("skillIds")
     .optional()
     .isArray()
-    .withMessage("Keywords must be an array"),
-  body("skills").optional().isArray().withMessage("Skills must be an array"),
+    .withMessage("Skills must be an array of skill IDs.")
+    .custom((skillIds) => {
+      if (skillIds) {
+        for (const skillId of skillIds) {
+          if (!mongoose.Types.ObjectId.isValid(skillId)) {
+            throw new Error(`Invalid skill ID provided: ${skillId}`);
+          }
+        }
+      }
+      return true;
+    }),
+  body("categoryId").optional().isMongoId().withMessage("Invalid category ID."),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

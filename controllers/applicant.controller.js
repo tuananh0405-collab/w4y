@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import Project from '../models/project.model.js';
 import connectS3 from "../config/aws-s3.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import check from "check-types";
 
 const s3Client = connectS3();
 
@@ -217,6 +218,7 @@ export const deleteUploadedCV = async (req, res, next) => {
 // Lấy thông tin hồ sơ của ứng viên
 export const getProfile = async (req, res, next) => {
   try {
+
     const applicantId = req.user._id; // Lấy applicantId từ JWT
     const applicantProfile = await ApplicantProfile.findOne({ userId: applicantId }).populate("userId", "name email phone district city");
 
@@ -286,6 +288,7 @@ export const updateProfile = async (req, res, next) => {
       success: true,
       message: "Profile updated successfully",
       data: updatedProfile,
+
     });
   } catch (error) {
     next(error);
@@ -320,7 +323,7 @@ export const searchApplicants = async (req, res, next) => {
       });
     }
 
-    const { jobTitle, skills, experience, location } = req.query;
+    const { jobTitle, skillIds, experience, location } = req.query;
 
     // Xây dựng điều kiện tìm kiếm
     const query = {};
@@ -329,8 +332,8 @@ export const searchApplicants = async (req, res, next) => {
       query["profile.jobTitle"] = { $regex: jobTitle, $options: "i" }; // Tìm kiếm không phân biệt chữ hoa/thường
     }
 
-    if (skills) {
-      query["profile.skills"] = { $regex: skills, $options: "i" };
+    if (check.nonEmptyArray(skillIds)) {
+      query["profile.skillIds"] = { $in: skillIds };
     }
 
     if (experience) {
@@ -367,7 +370,7 @@ export const searchApplicants = async (req, res, next) => {
           name: 1,
           "profile.jobTitle": 1, // Lấy thông tin jobTitle từ profile
           "profile.experience": 1, // Lấy thông tin experience từ profile
-          "profile.skills": 1, // Lấy thông tin experience từ profile
+          "profile.skillIds": 1, // Lấy thông tin experience từ profile
           city: 1,
         },
       },

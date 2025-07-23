@@ -32,4 +32,7 @@ export const {
   AWS_SECRET_ACCESS_KEY,
   AWS_REGION,
   CONVERT_SECRET,
+  CHROMA_URL,
+  OPENAI_API_KEY,
+  GA_PROPERTY_ID,
 } = process.env;

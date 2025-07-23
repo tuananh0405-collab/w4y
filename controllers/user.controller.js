@@ -57,6 +57,7 @@ export const getUser = async (req, res, next) => {
     // Tìm ApplicantProfile theo userId lấy skills, education
     const profile = await ApplicantProfile.findOne({ userId }).select('skills education jobTitle resumeFiles userDetail level openToWork timeWork experience');
 
+
     res.status(200).json({
       success: true,
       data: {
@@ -82,7 +83,7 @@ export const getUser = async (req, res, next) => {
   }
 };
 
-export const updateUserByID = async (req, res) => {
+export const updateUserByID = async (req, res, next) => {
   try {
     // Lấy userId từ JWT trong cookie
     const userId = req.user._id;
@@ -184,7 +185,6 @@ export const updateUserProfile = async (req, res, next) => {
     user.district = req.body.district || user.district;
 
     await user.save();
-
     res.status(200).json({
       success: true,
       data: {

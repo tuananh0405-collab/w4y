@@ -63,3 +63,6 @@ typings/
 
 # ignore uploads
 uploads/
+
+# ignore google analytics service account file
+service-account.json
