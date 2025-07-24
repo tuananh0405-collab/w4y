@@ -172,9 +172,9 @@ export const syncAllJobsToChroma = async () => {
       page++;
     }
 
-    // console.log(
-    //   `!!! Full sync to ChromaDB completed successfully. ${totalProcessed} jobs were processed.`,
-    // );
+    console.log(
+      `!!! Full sync to ChromaDB completed successfully. ${totalProcessed} jobs were processed.`,
+    );
   } catch (error) {
     console.error("!!! An error occurred during ChromaDB full sync:", error);
   }

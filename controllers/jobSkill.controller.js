@@ -51,12 +51,12 @@ export const createJobSkill = async (req, res, next) => {
       description,
     });
 
-    await newSkill.save();
+    const savedSkill = await newSkill.save();
 
     res.status(201).json({
       success: true,
       message: "Job skill created successfully",
-      data: newSkill,
+      data: savedSkill,
     });
   } catch (error) {
     next(error);

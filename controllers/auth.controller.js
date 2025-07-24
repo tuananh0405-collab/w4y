@@ -472,16 +472,16 @@ export const adminSignUp = async (req, res, next) => {
       accountType: "Admin",
       isVerified: true, // Admins are verified by default
     });
-    await newUser.save();
+    const savedUser = await newUser.save();
 
     res.status(201).json({
       success: true,
       message: "Admin account created successfully",
       user: {
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        accountType: newUser.accountType,
+        id: savedUser._id,
+        name: savedUser.name,
+        email: savedUser.email,
+        accountType: savedUser.accountType,
       },
     });
   } catch (error) {

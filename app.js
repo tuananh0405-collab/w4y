@@ -25,6 +25,8 @@ import jobCategoryRouter from "./routes/jobCategory.routes.js";
 import jobSkillRouter from "./routes/jobSkill.routes.js";
 import { connectToChromaDB } from "./database/chromadb.js";
 import { syncAllJobsToChroma } from "./services/chroma.service.js";
+import check from "check-types";
+import analyticsRouter from "./routes/analytics.routes.js";
 
 // Thêm đoạn này để lấy __dirname trong ES module
 const __filename = fileURLToPath(import.meta.url);
@@ -58,6 +60,7 @@ app.use("/api/v1/payment", paymentRouter);
 app.use("/api/v1/review", reviewRouter);
 app.use("/api/v1/chat", chatRouter);
 app.use("/api/v1/media", mediaRouter);
+app.use("/api/v1/analytics", analyticsRouter);
 app.use(errorMiddleware);
 
 app.get("/", (req, res) => {
