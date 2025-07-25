@@ -374,6 +374,7 @@ export const getApplicationStatusDistribution = async (req, res) => {
 // Applications by Job
 export const getApplicationsByJob = async (req, res) => {
   try {
+    const { limit = 4 } = req.query;
     const stats = await Application.aggregate([
       {
         $group: {
@@ -385,7 +386,7 @@ export const getApplicationsByJob = async (req, res) => {
         $sort: { count: -1 }
       },
       {
-        $limit: 20 // Limit to top 20 jobs for performance
+        $limit: parseInt(limit), // Limit to top N jobs for performance
       },
       {
         $lookup: {
