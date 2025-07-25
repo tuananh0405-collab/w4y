@@ -13,6 +13,8 @@ import {
 import jwt from "jsonwebtoken";
 import passport from "../config/passport.js";
 import { body, validationResult } from "express-validator";
+import {verifyEmailTemplate} from "../utils/verifyEmailTemplate.js";
+import { log } from "console";
 
 // Đăng ký người dùng
 // export const signUp = async (req, res, next) => {
@@ -157,13 +159,13 @@ export const signUp = async (req, res, next) => {
 
     // Lưu người dùng mới vào cơ sở dữ liệu
     await newUser.save();
-
     // Gửi email với mã xác minh
     const mailOptions = {
       from: EMAIL_ACCOUNT,
       to: email,
       subject: "Verify Your Email",
-      text: `Your verification code is: ${verificationCode}`,
+      // text: `Your verification code is: ${verificationCode}`,
+        html: verifyEmailTemplate({verificationCode}),
     };
 
     await transporter.sendMail(mailOptions);
