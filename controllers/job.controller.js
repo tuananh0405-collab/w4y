@@ -1545,16 +1545,16 @@ export const validateCreateJob = [
     .withMessage("Title is required")
     .isLength({ min: 5, max: 100 })
     .withMessage("Title must be 5-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Title must be valid and not random characters"),
+    .matches(/^[a-zA-Z0-9À-ỹĂăÂâĐđÊêÔôƠơƯưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ\s'.\-/()&]+$/u)
+    .withMessage("Title must be valid and not contain special characters"),
   body("description")
     .trim()
     .notEmpty()
     .withMessage("Description is required")
     .isLength({ min: 20, max: 2000 })
     .withMessage("Description must be 20-2000 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.,-]+$/u)
-    .withMessage("Description must be valid and not random characters"),
+    .matches(/^[a-zA-Z0-9À-ỹĂăÂâĐđÊêÔôƠơƯưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ\s'.,\-()&:;\[\]!?"/\r\n]+$/u)
+    .withMessage("Description must be valid and not contain harmful characters"),
   body("requirements")
     .trim()
     .notEmpty()
@@ -1606,20 +1606,20 @@ export const validateCreateJob = [
     .optional()
     .isLength({ min: 2, max: 100 })
     .withMessage("Industry must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Industry must be valid and not random characters"),
+    .matches(/^[a-zA-Z0-9À-ỹĂăÂâĐđÊêÔôƠơƯưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ\s'.\-/&]+$/u)
+    .withMessage("Industry must be valid and not contain special characters"),
   body("position")
     .optional()
     .isLength({ min: 2, max: 100 })
     .withMessage("Position must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Position must be valid and not random characters"),
+    .matches(/^[a-zA-Z0-9À-ỹĂăÂâĐđÊêÔôƠơƯưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ\s'.\-/&]+$/u)
+    .withMessage("Position must be valid and not contain special characters"),
   body("location")
     .optional()
     .isLength({ min: 2, max: 100 })
     .withMessage("Location must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
-    .withMessage("Location must be valid and not random characters"),
+    .matches(/^[a-zA-Z0-9À-ỹĂăÂâĐđÊêÔôƠơƯưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ\s'.,\-/()&]+$/u)
+    .withMessage("Location must be valid and not contain special characters"),
   body("experience").optional(),
   body("deadline")
     .optional()
