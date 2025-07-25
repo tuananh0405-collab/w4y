@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import User from "../models/user.model.js";
+import ApplicantProfile from "../models/applicantProfile.model.js";
 import generateToken from "../utils/generateToken.js";
 import crypto from "crypto";
 import transporter from "../config/nodemailer.js";
@@ -172,6 +173,15 @@ export const signUp = async (req, res, next) => {
 
     // Lưu người dùng mới vào cơ sở dữ liệu
     await newUser.save();
+
+    // Tạo applicant profile khi mới đăng ký
+    if (accountType === "Ứng Viên") {
+      const applicantProfile = {
+        userId: newUser._id,
+      };
+      await ApplicantProfile.create(applicantProfile);
+    }
+
     // Gửi email với mã xác minh
     const mailOptions = {
       from: EMAIL_ACCOUNT,
