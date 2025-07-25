@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import Project from '../models/project.model.js';
 import connectS3 from "../config/aws-s3.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import check from "check-types";
 
 const s3Client = connectS3();
 
@@ -215,7 +216,84 @@ export const deleteUploadedCV = async (req, res, next) => {
 };
 
 // Lấy thông tin hồ sơ của ứng viên
-export const getProfile = (req, res, next) => {};
+export const getProfile = async (req, res, next) => {
+  try {
+
+    const applicantId = req.user._id; // Lấy applicantId từ JWT
+    const applicantProfile = await ApplicantProfile.findOne({ userId: applicantId }).populate("userId", "name email phone district city");
+
+    if (!applicantProfile) {
+      const newProfile = new ApplicantProfile({
+        userId: applicantId,
+      });
+      await newProfile.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Profile fetched successfully",
+        data: newProfile,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile fetched successfully",
+      data: applicantProfile,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// Cập nhật hồ sơ của ứng viên
+export const updateProfile = async (req, res, next) => {
+  try {
+    const {
+      jobTitle,
+      skills,
+      userDetail,
+      level,
+      education,
+      experience,
+      openToWork,
+      timeWork
+    } = req.body;
+
+    const updateData = {
+      jobTitle,
+      skills,
+      userDetail,
+      level,
+      education,
+      experience,
+      openToWork,
+      timeWork
+    };
+
+    const updatedProfile = await ApplicantProfile.findOneAndUpdate(
+      { userId: req.user._id },
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!updatedProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Applicant profile not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: updatedProfile,
+
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // Đếm số dự án đã ứng tuyển của applicant hiện tại
 export const countApplicationsByApplicant = async (req, res, next) => {
@@ -245,7 +323,7 @@ export const searchApplicants = async (req, res, next) => {
       });
     }
 
-    const { jobTitle, skills, experience, location } = req.query;
+    const { jobTitle, skillIds, experience, location } = req.query;
 
     // Xây dựng điều kiện tìm kiếm
     const query = {};
@@ -254,8 +332,8 @@ export const searchApplicants = async (req, res, next) => {
       query["profile.jobTitle"] = { $regex: jobTitle, $options: "i" }; // Tìm kiếm không phân biệt chữ hoa/thường
     }
 
-    if (skills) {
-      query["profile.skills"] = { $regex: skills, $options: "i" };
+    if (check.nonEmptyArray(skillIds)) {
+      query["profile.skillIds"] = { $in: skillIds };
     }
 
     if (experience) {
@@ -292,7 +370,7 @@ export const searchApplicants = async (req, res, next) => {
           name: 1,
           "profile.jobTitle": 1, // Lấy thông tin jobTitle từ profile
           "profile.experience": 1, // Lấy thông tin experience từ profile
-          "profile.skills": 1, // Lấy thông tin experience từ profile
+          "profile.skillIds": 1, // Lấy thông tin experience từ profile
           city: 1,
         },
       },
