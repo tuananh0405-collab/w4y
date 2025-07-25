@@ -66,39 +66,52 @@ import { body, validationResult } from "express-validator";
 export const validateSignUp = [
   body("name")
     .trim()
-    .notEmpty().withMessage("Name is required")
-    .isLength({ min: 2, max: 50 }).withMessage("Name must be 2-50 characters")
-    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("Name must be valid and not random characters"),
+    .notEmpty()
+    .withMessage("Name is required")
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Name must be 2-50 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u)
+    .withMessage("Name must be valid and not random characters"),
   body("email")
     .trim()
-    .notEmpty().withMessage("Email is required")
-    .isEmail().withMessage("Invalid email address"),
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email address"),
   body("password")
-    .notEmpty().withMessage("Password is required")
-    .isLength({ min: 8, max: 50 }).withMessage("Password must be 8-50 characters")
-    .matches(/[A-Za-z]/).withMessage("Password must contain letters")
-    .matches(/[0-9]/).withMessage("Password must contain numbers"),
+    .notEmpty()
+    .withMessage("Password is required")
+    .isLength({ min: 8, max: 50 })
+    .withMessage("Password must be 8-50 characters")
+    .matches(/[A-Za-z]/)
+    .withMessage("Password must contain letters")
+    .matches(/[0-9]/)
+    .withMessage("Password must contain numbers"),
   body("accountType")
-    .notEmpty().withMessage("Account type is required")
-    .isIn(["Nhà Tuyển Dụng", "Ứng Viên", "Admin"]).withMessage("Invalid account type"),
+    .notEmpty()
+    .withMessage("Account type is required")
+    .isIn(["Nhà Tuyển Dụng", "Ứng Viên", "Admin"])
+    .withMessage("Invalid account type"),
   body("gender")
     .optional()
-    .isIn(["male", "female"]).withMessage("Gender must be 'male' or 'female'"),
+    .isIn(["male", "female"])
+    .withMessage("Gender must be 'male' or 'female'"),
   body("phone")
     .optional()
-    .isMobilePhone("vi-VN").withMessage("Invalid Vietnamese phone number"),
+    .isMobilePhone("vi-VN")
+    .withMessage("Invalid Vietnamese phone number"),
   body("company")
     .optional()
-    .isLength({ min: 2, max: 100 }).withMessage("Company name must be 2-100 characters")
-    .matches(/^[a-zA-Z0-9À-ỹ\s'.-]+$/u).withMessage("Company name must be valid and not random characters"),
-  body("city")
-    .optional()
-    .isLength({ min: 2, max: 100 }).withMessage("City must be 2-100 characters")
-    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("City must be valid and not random characters"),
-  body("district")
-    .optional()
-    .isLength({ min: 2, max: 100 }).withMessage("District must be 2-100 characters")
-    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("District must be valid and not random characters"),
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Company name must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ỹ\s'.-]+$/u)
+    .withMessage("Company name must be valid and not random characters"),
+  body("city").optional(),
+  // .isLength({ min: 2, max: 100 }).withMessage("City must be 2-100 characters")
+  // .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("City must be valid and not random characters"),
+  body("district").optional(),
+  // .isLength({ min: 2, max: 100 }).withMessage("District must be 2-100 characters")
+  // .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("District must be valid and not random characters"),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -384,64 +397,77 @@ export const googleAuth = (req, res, next) => {
 };
 
 export const googleCallback = (req, res, next) => {
-  passport.authenticate("google", { failureRedirect: "/auth" }, async (err, user) => {
-    try {
-      if (err) {
-        const error = new Error(err.message);
-        error.statusCode = 500;
-        throw error;
+  passport.authenticate(
+    "google",
+    { failureRedirect: "/auth" },
+    async (err, user) => {
+      try {
+        if (err) {
+          const error = new Error(err.message);
+          error.statusCode = 500;
+          throw error;
+        }
+
+        if (!user) {
+          const error = new Error("Google authentication failed");
+          error.statusCode = 401;
+          throw error;
+        }
+
+        // Generate JWT tokens
+        generateToken(res, user._id);
+
+        // Create user object with required structure to match normal login
+        const userData = {
+          success: true,
+          message: "Google authentication successful",
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            accountType: user.accountType,
+          },
+          redirectUrl: FE_URL,
+        };
+
+        // Send response with redirect URL and user data
+        res.redirect(
+          `${FE_URL}/auth/google/callback?user=${encodeURIComponent(
+            JSON.stringify(userData)
+          )}`
+        );
+      } catch (error) {
+        next(error);
       }
-
-      if (!user) {
-        const error = new Error("Google authentication failed");
-        error.statusCode = 401;
-        throw error;
-      }
-
-      // Generate JWT tokens
-      generateToken(res, user._id);
-
-      // Create user object with required structure to match normal login
-      const userData = {
-        success: true,
-        message: "Google authentication successful",
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          accountType: user.accountType,
-        },
-        redirectUrl:FE_URL
-      };
-
-      // Send response with redirect URL and user data
-      res.redirect(
-        `${FE_URL}/auth/google/callback?user=${encodeURIComponent(
-          JSON.stringify(userData)
-        )}`
-      );
-    } catch (error) {
-      next(error);
     }
-  })(req, res, next);
+  )(req, res, next);
 };
 
 // Validation middleware for admin sign up
 export const validateAdminSignUp = [
   body("name")
     .trim()
-    .notEmpty().withMessage("Name is required")
-    .isLength({ min: 2, max: 50 }).withMessage("Name must be 2-50 characters")
-    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u).withMessage("Name must be valid and not random characters"),
+    .notEmpty()
+    .withMessage("Name is required")
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Name must be 2-50 characters")
+    .matches(/^[a-zA-ZÀ-ỹ\s'.-]+$/u)
+    .withMessage("Name must be valid and not random characters"),
   body("email")
     .trim()
-    .notEmpty().withMessage("Email is required")
-    .isEmail().withMessage("Invalid email address"),
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email address"),
   body("password")
-    .notEmpty().withMessage("Password is required")
-    .isLength({ min: 8, max: 50 }).withMessage("Password must be 8-50 characters")
-    .matches(/[A-Za-z]/).withMessage("Password must contain letters")
-    .matches(/[0-9]/).withMessage("Password must contain numbers"),
+    .notEmpty()
+    .withMessage("Password is required")
+    .isLength({ min: 8, max: 50 })
+    .withMessage("Password must be 8-50 characters")
+    .matches(/[A-Za-z]/)
+    .withMessage("Password must contain letters")
+    .matches(/[0-9]/)
+    .withMessage("Password must contain numbers"),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -459,7 +485,9 @@ export const adminSignUp = async (req, res, next) => {
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ success: false, message: "Admin already exists" });
+      return res
+        .status(409)
+        .json({ success: false, message: "Admin already exists" });
     }
 
     // Create new admin user
@@ -493,10 +521,11 @@ export const adminSignUp = async (req, res, next) => {
 export const validateAdminSignIn = [
   body("email")
     .trim()
-    .notEmpty().withMessage("Email is required")
-    .isEmail().withMessage("Invalid email address"),
-  body("password")
-    .notEmpty().withMessage("Password is required"),
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email address"),
+  body("password").notEmpty().withMessage("Password is required"),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -512,14 +541,20 @@ export const adminSignIn = async (req, res, next) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
     if (!user || user.accountType !== "Admin") {
-      return res.status(404).json({ success: false, message: "Admin not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Admin not found" });
     }
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(401).json({ success: false, message: "Invalid password" });
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid password" });
     }
     if (!user.isVerified) {
-      return res.status(403).json({ success: false, message: "Admin account not verified" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Admin account not verified" });
     }
     generateToken(res, user._id);
     res.status(200).json({
