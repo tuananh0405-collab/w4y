@@ -85,7 +85,7 @@ export const createJobPosting = async (req, res, next) => {
 
     if (
       check.all(
-        check.map(salaryRange, { start: check.number, end: check.number }),
+        check.map(salaryRange, { start: check.number, end: check.number })
       ) &&
       check.in(salaryRangeUnit, salaryRangeUnitEnum)
     ) {
@@ -282,7 +282,7 @@ export const viewJobList = async (req, res, next) => {
           views: job.views,
           status: job.status,
         };
-      }),
+      })
     );
 
     res.status(200).json({
@@ -818,7 +818,7 @@ export const updateApplicationStatus = async (req, res, next) => {
     const application = await Application.findOneAndUpdate(
       { id, applicantId },
       { status },
-      { new: true },
+      { new: true }
     ).populate("applicantId", "name email");
 
     if (!application) {
@@ -857,7 +857,7 @@ export const trackJobView = async (req, res, next) => {
     const job = await Job.findByIdAndUpdate(
       id,
       { $inc: { views: 1 } },
-      { new: true },
+      { new: true }
     );
 
     if (!job) {
@@ -953,7 +953,7 @@ export const getRecommendedJobs = async (req, res, next) => {
           views: job.views,
           status: job.status,
         };
-      }),
+      })
     );
 
     res.status(200).json({
@@ -997,7 +997,9 @@ export const getAIRecommendedJobs = async (req, res, next) => {
     // 3. Construct a query text from the user's profile for ChromaDB
     const skillNames =
       profile.skillIds?.map((skill) => skill.name).join(", ") || "none";
-    const queryText = `Title: ${profile.jobTitle || ""}. Skills: ${skillNames}.`;
+    const queryText = `Title: ${
+      profile.jobTitle || ""
+    }. Skills: ${skillNames}.`;
 
     // 4. Query ChromaDB to get the most relevant job IDs
     const recommendedJobIds = await queryJobsFromChroma(queryText, 10);
@@ -1019,7 +1021,7 @@ export const getAIRecommendedJobs = async (req, res, next) => {
 
     // 6. Sort the MongoDB results to match the relevance order from ChromaDB
     const jobMap = new Map(
-      jobsFromMongo.map((job) => [job._id.toString(), job]),
+      jobsFromMongo.map((job) => [job._id.toString(), job])
     );
     const sortedJobs = recommendedJobIds
       .map((id) => jobMap.get(id))
@@ -1183,7 +1185,7 @@ export const getRelatedJobs = async (req, res, next) => {
           createdAt: job.createdAt,
           deadline: job.deadline,
         };
-      }),
+      })
     );
 
     res.status(200).json({
@@ -1228,7 +1230,7 @@ export const getFilterOptions = async (req, res, next) => {
 
     // Get unique industries
     const industries = await JobCategory.find({ parentId: null }).select(
-      "_id name",
+      "_id name"
     );
 
     // Get fields with enum associated with them
@@ -1466,19 +1468,39 @@ export const getJobStatusDistribution = async (req, res) => {
 // Jobs by Category
 export const getJobsByCategory = async (req, res) => {
   try {
+    const { limit = 4 } = req.query;
     const stats = await Job.aggregate([
+      {
+        $match: {
+          status: "active",
+          isHidden: false,
+        },
+      },
       {
         $group: {
           _id: "$industry",
           count: { $sum: 1 },
         },
       },
+      {
+        $sort: { count: -1 }, // Sắp xếp theo số lượng job giảm dần
+      },
+      {
+        $limit: parseInt(limit), // Giới hạn số lượng category
+      },
+      {
+        $project: {
+          category: { $ifNull: ["$_id", "Uncategorized"] },
+          count: 1,
+          _id: 0,
+        },
+      },
     ]);
     res.json({
-      data: stats.map(({ _id, count }) => ({
-        category: _id || "Uncategorized",
-        count,
-      })),
+      success: true,
+      message: "Top job categories fetched successfully",
+      data: stats,
+      total: stats.length,
     });
   } catch (err) {
     console.error("Error fetching jobs by category:", err);
@@ -1550,14 +1572,14 @@ export const validateCreateJob = [
         check.map(salaryRange, {
           start: check.assigned,
           end: check.assigned,
-        }),
+        })
       ) && check.assigned(salaryRangeUnit);
 
     if (hasTextSalary || hasValidSalaryRange) {
       return true;
     }
     throw new Error(
-      "Either salary (string) or a complete salaryRange (object with start/end, alongside salaryRangeUnit) must be provided",
+      "Either salary (string) or a complete salaryRange (object with start/end, alongside salaryRangeUnit) must be provided"
     );
   }),
 
