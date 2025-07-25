@@ -1,7 +1,22 @@
-import Job from "../models/job.model.js";
-import User from "../models/user.model.js";  // Đảm bảo bạn import User model
+import Job, {
+  experienceEnum,
+  levelEnum,
+  salaryRangeUnitEnum,
+} from "../models/job.model.js";
+import User from "../models/user.model.js"; // Đảm bảo bạn import User model
 import Application from "../models/application.model.js";
 import ApplicantProfile from "../models/applicantProfile.model.js";
+import { body, param, validationResult } from "express-validator";
+import JobCategory from "../models/jobCategory.model.js";
+import { Types } from "mongoose";
+import { jobCategoriesRecursiveRoutine } from "./jobCategory.controller.js";
+import { isChromaConnected } from "../database/chromadb.js";
+import {
+  addOrUpdateJobInChroma,
+  deleteJobFromChroma,
+  queryJobsFromChroma,
+} from "../services/chroma.service.js";
+import check from "check-types";
 
 /**
  * POST /api/v1/job
@@ -11,50 +26,21 @@ import ApplicantProfile from "../models/applicantProfile.model.js";
 export const createJobPosting = async (req, res, next) => {
   try {
     // Check if user is a recruiter
-    if (req.user.accountType !== 'Nhà Tuyển Dụng') {
+    if (req.user.accountType !== "Nhà Tuyển Dụng") {
       return res.status(403).json({
         success: false,
-        message: "Only recruiters can create job posts"
+        message: "Only recruiters can create job posts",
       });
     }
 
-    const { 
-      title, 
-      description, 
-      requirements, 
-      salary, 
-      deliveryTime, 
-      priorityLevel,
-      quantity,
-      level,
-      industry,
-      position,
-      location,
-      experience,
-      deadline,
-      keywords,
-      skills
-    } = req.body;
-    
-    const employerId = req.user._id;
-
-    // Check if job with same title already exists for this employer
-    const existingJob = await Job.findOne({ title, employerId });
-
-    if (existingJob) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Job with this title already exists" 
-      });
-    }
-
-    // Create new job
-    const newJob = new Job({
-      employerId,
+    // Use only validated and sanitized input
+    const {
       title,
       description,
       requirements,
       salary,
+      salaryRange,
+      salaryRangeUnit,
       deliveryTime,
       priorityLevel,
       quantity,
@@ -65,14 +51,64 @@ export const createJobPosting = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills,
-      status: "active" // Default status for new jobs
-    });
+      skillIds,
+      categoryId,
+    } = req.body;
 
+    // Ensure all required text fields are trimmed and string
+    const jobData = {
+      employerId: req.user._id,
+      title: typeof title === "string" ? title.trim() : "",
+      description: typeof description === "string" ? description.trim() : "",
+      requirements: typeof requirements === "string" ? requirements.trim() : "",
+      deliveryTime:
+        typeof deliveryTime === "string" ? deliveryTime.trim() : deliveryTime,
+      priorityLevel,
+      quantity,
+      level: typeof level === "string" ? level.trim() : level,
+      industry: typeof industry === "string" ? industry.trim() : industry,
+      position: typeof position === "string" ? position.trim() : position,
+      location: typeof location === "string" ? location.trim() : location,
+      experience:
+        typeof experience === "string" ? experience.trim() : experience,
+      deadline,
+      keywords,
+      skillIds,
+      status: "active",
+      categoryId: Types.ObjectId.createFromHexString(categoryId),
+    };
+
+    // The "must provide either salary string or salaryRange" validation condition only applies to the endpoint (only enforced by the validator middleware). You can provide neither salary string nor salary range here, I don't really care.
+    if (check.nonEmptyString(salary)) {
+      jobData.salary = salary;
+    }
+
+    if (
+      check.all(
+        check.map(salaryRange, { start: check.number, end: check.number }),
+      ) &&
+      check.in(salaryRangeUnit, salaryRangeUnitEnum)
+    ) {
+      jobData.salaryRange = salaryRange;
+      jobData.salaryRangeUnit = salaryRangeUnit;
+    }
+
+    // Create new job
+    const newJob = new Job(jobData);
     await newJob.save();
 
     // Get employer information
-    const employer = await User.findById(employerId).select("name");
+    const employer = await User.findById(req.user._id).select("name");
+
+    // After sending the response, update the document on ChromaDB
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        // Use setImmediate to avoid blocking the event loop
+        setImmediate(() => {
+          addOrUpdateJobInChroma(newJob._id.toString());
+        });
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -109,48 +145,118 @@ export const createJobPosting = async (req, res, next) => {
  */
 export const viewJobList = async (req, res, next) => {
   try {
-    const { 
-      location, 
-      position, 
-      keywords, 
-      skills, 
-      industry, 
+    const {
+      location,
+      position,
+      keywords,
+      skillIds,
+      industry,
+      categoryIds,
       level,
+      experience,
+      salaryRangeStart,
+      salaryRangeEnd,
+      salaryRangeUnit,
       status = "active", // Default to active jobs only
       page = 1,
-      limit = 10
+      limit = 10,
     } = req.query;
 
     // Build filter object
     const filter = {
       isHidden: false, // Only show non-hidden jobs
-      status: status
+      status: status,
     };
 
     // Add filters if provided
-    if (location) filter.location = { $regex: location, $options: 'i' };
-    if (position) filter.position = { $regex: position, $options: 'i' };
-    if (industry) filter.industry = { $regex: industry, $options: 'i' };
-    if (level) filter.level = { $regex: level, $options: 'i' };
+    if (location) filter.location = { $regex: location, $options: "i" };
+    if (position) filter.position = { $regex: position, $options: "i" };
+    if (industry) filter.industry = { $regex: industry, $options: "i" };
+    if (categoryIds) {
+      let categoryIdArray = [];
+      if (Array.isArray(categoryIds)) {
+        categoryIdArray = categoryIds;
+      } else if (typeof categoryIds === "string") {
+        // comma-separated or single value
+        categoryIdArray = categoryIds.split(",").map((id) => id.trim());
+      }
+
+      const ids = categoryIdArray.filter((id) => Types.ObjectId.isValid(id));
+      if (ids.length > 0) {
+        filter.categoryId = { $in: ids };
+      } else if (Types.ObjectId.isValid(industry)) {
+        const categoryIdArray = await jobCategoriesRecursiveRoutine(industry);
+
+        const ids = categoryIdArray.filter((id) => Types.ObjectId.isValid(id));
+        if (ids.length > 0) {
+          filter.categoryId = { $in: ids };
+        }
+      }
+    }
+
+    if (level) filter.level = level;
+    if (experience) filter.experience = experience;
+    /*
+     * make experience field acts as a roof instead of exact value
+      const idx = experienceEnum.indexOf(experience);
+      if (idx !== -1) {
+        filter.experience = { $in: experienceEnum.slice(0, idx + 1) };
+      }
+     */
+
     if (keywords) {
       filter.$text = { $search: keywords };
     }
-    if (skills) {
-      const skillsArray = skills.split(',').map(skill => skill.trim());
-      filter.skills = { $in: skillsArray };
+    if (skillIds) {
+      const skillsArray = skillIds.split(",").map((skill) => skill.trim());
+      filter.skillIds = { $in: skillsArray };
+    }
+
+    const salaryRangeFilter = {};
+    if (salaryRangeUnit) {
+      if (salaryRangeStart || salaryRangeEnd) {
+        salaryRangeFilter["$or"] = [
+          {
+            salaryRangeUnit: salaryRangeUnit,
+            // Both are gte because I figured that when you're filtering for salaryRange, you are asking for jobs that offer at least salaryRange.start and more in amount, and at most salaryRange.end and more in amount
+            // idk, might be subject to changes
+            ...(salaryRangeStart
+              ? { "salaryRange.start": { $gte: parseInt(salaryRangeStart) } }
+              : {}),
+            ...(salaryRangeEnd
+              ? { "salaryRange.end": { $gte: parseInt(salaryRangeEnd) } }
+              : {}),
+          },
+          {
+            $and: [
+              { "salaryRange.start": { $exists: false } },
+              { "salaryRange.end": { $exists: false } },
+            ],
+          },
+        ];
+      }
+    }
+
+    let sortOptions = { createdAt: -1, priorityLevel: -1 };
+
+    // If a salary range filter is applied, prioritize jobs with a defined salary range.
+    if (salaryRangeUnit) {
+      sortOptions = { "salaryRange.start": -1, ...sortOptions };
     }
 
     // Pagination
     const skip = (page - 1) * limit;
 
     // Get jobs with pagination
-    const jobs = await Job.find(filter)
-      .sort({ createdAt: -1, priorityLevel: -1 })
+    const jobs = await Job.find({ $and: [filter, salaryRangeFilter] })
+      .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
 
     // Get total count for pagination
-    const totalJobs = await Job.countDocuments(filter);
+    const totalJobs = await Job.countDocuments({
+      $and: [filter, salaryRangeFilter],
+    });
 
     // Format jobs with employer information
     const formattedJobs = await Promise.all(
@@ -163,6 +269,8 @@ export const viewJobList = async (req, res, next) => {
           description: job.description,
           requirements: job.requirements,
           salary: job.salary,
+          salaryRange: job.salaryRange,
+          salaryRangeUnit: job.salaryRangeUnit,
           deliveryTime: job.deliveryTime,
           priorityLevel: job.priorityLevel,
           createdAt: job.createdAt,
@@ -172,9 +280,9 @@ export const viewJobList = async (req, res, next) => {
           position: job.position,
           level: job.level,
           views: job.views,
-          status: job.status
+          status: job.status,
         };
-      })
+      }),
     );
 
     res.status(200).json({
@@ -186,8 +294,8 @@ export const viewJobList = async (req, res, next) => {
         totalPages: Math.ceil(totalJobs / limit),
         totalJobs,
         hasNextPage: page * limit < totalJobs,
-        hasPrevPage: page > 1
-      }
+        hasPrevPage: page > 1,
+      },
     });
   } catch (error) {
     next(error);
@@ -203,25 +311,26 @@ export const viewJobDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Find job and increment view count
-    const job = await Job.findByIdAndUpdate(
-      id,
-      { $inc: { views: 1 } },
-      { new: true }
-    );
+    // Increment view count
+    await Job.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+
+    // Find and populate
+    const job = await Job.findById(req.params.id)
+      .populate("categoryId")
+      .populate("skillIds");
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
     // Check if job is hidden
     if (job.isHidden) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -239,6 +348,8 @@ export const viewJobDetail = async (req, res, next) => {
         requirements: job.requirements,
         experience: job.experience,
         salary: job.salary,
+        salaryRange: job.salaryRange,
+        salaryRangeUnit: job.salaryRangeUnit,
         deliveryTime: job.deliveryTime,
         priorityLevel: job.priorityLevel,
         createdAt: job.createdAt,
@@ -249,9 +360,10 @@ export const viewJobDetail = async (req, res, next) => {
         position: job.position,
         location: job.location,
         keywords: job.keywords,
-        skills: job.skills,
+        category: job.categoryId,
+        skills: job.skillIds,
         views: job.views,
-        status: job.status
+        status: job.status,
       },
     });
   } catch (error) {
@@ -267,12 +379,12 @@ export const viewJobDetail = async (req, res, next) => {
 export const updateJob = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { 
-      title, 
-      description, 
-      requirements, 
-      salary, 
-      deliveryTime, 
+    const {
+      title,
+      description,
+      requirements,
+      salary,
+      deliveryTime,
       priorityLevel,
       quantity,
       level,
@@ -282,16 +394,16 @@ export const updateJob = async (req, res, next) => {
       experience,
       deadline,
       keywords,
-      skills
+      skillIds,
     } = req.body;
 
     // Find job
     const job = await Job.findById(id);
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -299,34 +411,40 @@ export const updateJob = async (req, res, next) => {
     if (job.employerId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "You can only update your own job posts"
+        message: "You can only update your own job posts",
       });
     }
 
-    // Update job fields
-    const updateFields = {
-      title: title || job.title,
-      description: description || job.description,
-      requirements: requirements || job.requirements,
-      salary: salary || job.salary,
-      deliveryTime: deliveryTime || job.deliveryTime,
-      priorityLevel: priorityLevel || job.priorityLevel,
-      quantity: quantity || job.quantity,
-      level: level || job.level,
-      industry: industry || job.industry,
-      position: position || job.position,
-      location: location || job.location,
-      experience: experience || job.experience,
-      deadline: deadline || job.deadline,
-      keywords: keywords || job.keywords,
-      skills: skills || job.skills
-    };
+    // Update job fields with trimmed and sanitized text
+    if (typeof title === "string") job.title = title.trim();
+    if (typeof description === "string") job.description = description.trim();
+    if (typeof requirements === "string")
+      job.requirements = requirements.trim();
+    if (typeof salary === "string") job.salary = salary.trim();
+    if (typeof deliveryTime === "string")
+      job.deliveryTime = deliveryTime.trim();
+    if (priorityLevel !== undefined) job.priorityLevel = priorityLevel;
+    if (quantity !== undefined) job.quantity = quantity;
+    if (typeof level === "string") job.level = level.trim();
+    if (typeof industry === "string") job.industry = industry.trim();
+    if (typeof position === "string") job.position = position.trim();
+    if (typeof location === "string") job.location = location.trim();
+    if (typeof experience === "string") job.experience = experience.trim();
+    if (deadline !== undefined) job.deadline = deadline;
+    if (keywords !== undefined) job.keywords = keywords;
+    if (skillIds !== undefined) job.skillIds = skillIds;
 
-    const updatedJob = await Job.findByIdAndUpdate(
-      id,
-      updateFields,
-      { new: true }
-    );
+    const updatedJob = await job.save();
+
+    // After sending the response, update the document on ChromaDB
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        // Use setImmediate to avoid blocking the event loop
+        setImmediate(() => {
+          addOrUpdateJobInChroma(newJob._id.toString());
+        });
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -351,9 +469,9 @@ export const deleteJob = async (req, res, next) => {
     const job = await Job.findById(id);
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -361,12 +479,20 @@ export const deleteJob = async (req, res, next) => {
     if (job.employerId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "You can only delete your own job posts"
+        message: "You can only delete your own job posts",
       });
     }
 
     // Delete the job
     await Job.findByIdAndDelete(id);
+
+    if (isChromaConnected) {
+      res.on("finish", () => {
+        setImmediate(() => {
+          deleteJobFromChroma(id);
+        });
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -390,9 +516,9 @@ export const hideJob = async (req, res, next) => {
     const job = await Job.findById(id);
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -400,7 +526,7 @@ export const hideJob = async (req, res, next) => {
     if (job.employerId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "You can only hide your own job posts"
+        message: "You can only hide your own job posts",
       });
     }
 
@@ -410,11 +536,11 @@ export const hideJob = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: `Job ${job.isHidden ? 'hidden' : 'unhidden'} successfully`,
+      message: `Job ${job.isHidden ? "hidden" : "unhidden"} successfully`,
       data: {
         id: job._id,
-        isHidden: job.isHidden
-      }
+        isHidden: job.isHidden,
+      },
     });
   } catch (error) {
     next(error);
@@ -432,33 +558,36 @@ export const updateJobStatus = async (req, res, next) => {
     const { status } = req.body;
 
     // Check if user is admin (you might need to add admin role to user model)
-    if (req.user.accountType !== 'Admin') {
+    if (req.user.accountType !== "Admin") {
       return res.status(403).json({
         success: false,
-        message: "Only admins can update job status"
+        message: "Only admins can update job status",
       });
     }
 
     // Validate status
-    const validStatuses = ["active", "inactive", "pending", "approved", "rejected", "flagged"];
+    const validStatuses = [
+      "active",
+      "inactive",
+      "pending",
+      "approved",
+      "rejected",
+      "flagged",
+    ];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid status value"
+        message: "Invalid status value",
       });
     }
 
     // Find and update job
-    const job = await Job.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true }
-    );
+    const job = await Job.findByIdAndUpdate(id, { status }, { new: true });
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -467,8 +596,8 @@ export const updateJobStatus = async (req, res, next) => {
       message: "Job status updated successfully",
       data: {
         id: job._id,
-        status: job.status
-      }
+        status: job.status,
+      },
     });
   } catch (error) {
     next(error);
@@ -482,15 +611,13 @@ export const updateJobStatus = async (req, res, next) => {
  */
 export const getJobOverview = async (req, res, next) => {
   try {
-
     const { startDate, endDate } = req.query;
-
 
     // Get job statistics
     const totalJobs = await Job.countDocuments();
-    const activeJobs = await Job.countDocuments({status: 'active' });
-    const pendingJobs = await Job.countDocuments({status: 'pending' });
-    const hiddenJobs = await Job.countDocuments({isHidden: true });
+    const activeJobs = await Job.countDocuments({ status: "active" });
+    const pendingJobs = await Job.countDocuments({ status: "pending" });
+    const hiddenJobs = await Job.countDocuments({ isHidden: true });
 
     res.status(200).json({
       success: true,
@@ -500,9 +627,9 @@ export const getJobOverview = async (req, res, next) => {
           totalJobs,
           activeJobs,
           pendingJobs,
-          hiddenJobs
+          hiddenJobs,
         },
-      }
+      },
     });
   } catch (error) {
     next(error);
@@ -520,10 +647,13 @@ export const getJobsByRecruiter = async (req, res, next) => {
     const { page = 1, limit = 10 } = req.query;
 
     // Check authorization
-    if (req.user.accountType !== 'Admin' && req.user._id.toString() !== recruiterId) {
+    if (
+      req.user.accountType !== "Admin" &&
+      req.user._id.toString() !== recruiterId
+    ) {
       return res.status(403).json({
         success: false,
-        message: "You can only view your own jobs"
+        message: "You can only view your own jobs",
       });
     }
 
@@ -549,25 +679,25 @@ export const getJobsByRecruiter = async (req, res, next) => {
         recruiter: {
           id: recruiter._id,
           name: recruiter.name,
-          email: recruiter.email
+          email: recruiter.email,
         },
-        jobs: jobs.map(job => ({
+        jobs: jobs.map((job) => ({
           id: job._id,
           title: job.title,
           status: job.status,
           isHidden: job.isHidden,
           views: job.views,
           createdAt: job.createdAt,
-          deadline: job.deadline
+          deadline: job.deadline,
         })),
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalJobs / limit),
           totalJobs,
           hasNextPage: page * limit < totalJobs,
-          hasPrevPage: page > 1
-        }
-      }
+          hasPrevPage: page > 1,
+        },
+      },
     });
   } catch (error) {
     next(error);
@@ -588,9 +718,9 @@ export const getJobApplicants = async (req, res, next) => {
     const job = await Job.findById(id);
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -598,7 +728,7 @@ export const getJobApplicants = async (req, res, next) => {
     if (job.employerId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "You can only view applicants for your own job posts"
+        message: "You can only view applicants for your own job posts",
       });
     }
 
@@ -607,7 +737,7 @@ export const getJobApplicants = async (req, res, next) => {
 
     // Get applications for this job
     const applications = await Application.find({ id })
-      .populate('applicantId', 'name email phone')
+      .populate("applicantId", "name email phone")
       .sort({ appliedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -621,9 +751,9 @@ export const getJobApplicants = async (req, res, next) => {
       data: {
         job: {
           id: job._id,
-          title: job.title
+          title: job.title,
         },
-        applicants: applications.map(app => ({
+        applicants: applications.map((app) => ({
           id: app._id,
           applicantId: app.applicantId._id,
           applicantName: app.applicantId.name,
@@ -631,16 +761,16 @@ export const getJobApplicants = async (req, res, next) => {
           applicantPhone: app.applicantId.phone,
           status: app.status,
           appliedAt: app.appliedAt,
-          resumeFile: app.resumeFile
+          resumeFile: app.resumeFile,
         })),
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalApplications / limit),
           totalApplications,
           hasNextPage: page * limit < totalApplications,
-          hasPrevPage: page > 1
-        }
-      }
+          hasPrevPage: page > 1,
+        },
+      },
     });
   } catch (error) {
     next(error);
@@ -661,9 +791,9 @@ export const updateApplicationStatus = async (req, res, next) => {
     const job = await Job.findById(id);
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -671,16 +801,16 @@ export const updateApplicationStatus = async (req, res, next) => {
     if (job.employerId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "You can only update applications for your own job posts"
+        message: "You can only update applications for your own job posts",
       });
     }
 
     // Validate status
-    const validStatuses = ['Pending', 'Phỏng vấn', 'Từ chối', 'Mới nhận'];
+    const validStatuses = ["Pending", "Phỏng vấn", "Từ chối", "Mới nhận"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid status value'
+        message: "Invalid status value",
       });
     }
 
@@ -688,26 +818,26 @@ export const updateApplicationStatus = async (req, res, next) => {
     const application = await Application.findOneAndUpdate(
       { id, applicantId },
       { status },
-      { new: true }
-    ).populate('applicantId', 'name email');
+      { new: true },
+    ).populate("applicantId", "name email");
 
     if (!application) {
       return res.status(404).json({
         success: false,
-        message: 'Application not found'
+        message: "Application not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Application status updated successfully',
+      message: "Application status updated successfully",
       data: {
         id: application._id,
         applicantName: application.applicantId.name,
         applicantEmail: application.applicantId.email,
         status: application.status,
-        updatedAt: application.appliedAt
-      }
+        updatedAt: application.appliedAt,
+      },
     });
   } catch (error) {
     next(error);
@@ -727,13 +857,13 @@ export const trackJobView = async (req, res, next) => {
     const job = await Job.findByIdAndUpdate(
       id,
       { $inc: { views: 1 } },
-      { new: true }
+      { new: true },
     );
 
     if (!job) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Job not found" 
+        message: "Job not found",
       });
     }
 
@@ -742,8 +872,8 @@ export const trackJobView = async (req, res, next) => {
       message: "Job view tracked successfully",
       data: {
         id: job._id,
-        views: job.views
-      }
+        views: job.views,
+      },
     });
   } catch (error) {
     next(error);
@@ -752,46 +882,46 @@ export const trackJobView = async (req, res, next) => {
 
 /**
  * GET /api/v1/job/recommended
- * Get AI-recommended jobs for the logged-in applicant
+ * Get filter-based job recommendations for the logged-in applicant
  * Allowed Roles: Applicant
  */
 export const getRecommendedJobs = async (req, res, next) => {
   try {
     // Check if user is an applicant
-    if (req.user.accountType !== 'Ứng Viên') {
+    if (req.user.accountType !== "Ứng Viên") {
       return res.status(403).json({
         success: false,
-        message: "Only applicants can get job recommendations"
+        message: "Only applicants can get job recommendations",
       });
     }
 
     // Get applicant profile
     const profile = await ApplicantProfile.findOne({ userId: req.user._id });
-    
+
     if (!profile) {
       return res.status(200).json({
         success: true,
         message: "No profile found, returning recent jobs",
-        data: []
+        data: [],
       });
     }
 
     // Build recommendation query based on profile
     const recommendationQuery = {
-      status: 'active',
-      isHidden: false
+      status: "active",
+      isHidden: false,
     };
 
     // Add filters based on profile data
     if (profile.jobTitle) {
       recommendationQuery.$or = [
-        { title: { $regex: profile.jobTitle, $options: 'i' } },
-        { position: { $regex: profile.jobTitle, $options: 'i' } }
+        { title: { $regex: profile.jobTitle, $options: "i" } },
+        { position: { $regex: profile.jobTitle, $options: "i" } },
       ];
     }
 
-    if (profile.skills && profile.skills.length > 0) {
-      recommendationQuery.skills = { $in: profile.skills };
+    if (profile.skillIds && profile.skillIds.length > 0) {
+      recommendationQuery.skillIds = { $in: profile.skillIds };
     }
 
     // Get recommended jobs
@@ -808,25 +938,122 @@ export const getRecommendedJobs = async (req, res, next) => {
           employerName: employer?.name,
           title: job.title,
           description: job.description,
+          requirements: job.requirements,
           salary: job.salary,
+          salaryRange: job.salaryRange,
+          salaryRangeUnit: job.salaryRangeUnit,
+          deliveryTime: job.deliveryTime,
+          priorityLevel: job.priorityLevel,
+          createdAt: job.createdAt,
           location: job.location,
           experience: job.experience,
           industry: job.industry,
           position: job.position,
           level: job.level,
-          priorityLevel: job.priorityLevel,
-          createdAt: job.createdAt,
-          deadline: job.deadline
+          views: job.views,
+          status: job.status,
         };
-      })
+      }),
     );
 
     res.status(200).json({
       success: true,
       message: "Recommended jobs fetched successfully",
-      data: formattedJobs
+      data: formattedJobs,
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/job/ai-recommended
+ * Get AI-powered job recommendations for the logged-in applicant using ChromaDB.
+ * Allowed Roles: Applicant
+ */
+export const getAIRecommendedJobs = async (req, res, next) => {
+  try {
+    // 1. Check if user is an applicant
+    if (req.user.accountType !== "Ứng Viên") {
+      return res.status(403).json({
+        success: false,
+        message: "Only applicants can get job recommendations",
+      });
+    }
+
+    // 2. Get applicant profile and populate their skills
+    const profile = await ApplicantProfile.findOne({
+      userId: req.user._id,
+    }).populate("skillIds", "name"); // Assumes profile has 'skillIds' ref to JobSkill
+
+    if (!profile) {
+      return res.status(200).json({
+        success: true,
+        message: "No profile found to generate AI recommendations.",
+        data: [],
+      });
+    }
+
+    // 3. Construct a query text from the user's profile for ChromaDB
+    const skillNames =
+      profile.skillIds?.map((skill) => skill.name).join(", ") || "none";
+    const queryText = `Title: ${profile.jobTitle || ""}. Skills: ${skillNames}.`;
+
+    // 4. Query ChromaDB to get the most relevant job IDs
+    const recommendedJobIds = await queryJobsFromChroma(queryText, 10);
+
+    if (!recommendedJobIds || recommendedJobIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Could not find any AI-recommended jobs.",
+        data: [],
+      });
+    }
+
+    // 5. Fetch the full job details from MongoDB for the recommended IDs
+    const jobsFromMongo = await Job.find({
+      _id: { $in: recommendedJobIds },
+      status: "active", // Ensure jobs are active and not hidden
+      isHidden: false,
+    }).populate("employerId", "name");
+
+    // 6. Sort the MongoDB results to match the relevance order from ChromaDB
+    const jobMap = new Map(
+      jobsFromMongo.map((job) => [job._id.toString(), job]),
+    );
+    const sortedJobs = recommendedJobIds
+      .map((id) => jobMap.get(id))
+      .filter(Boolean);
+
+    // 7. Format the final response
+    const formattedJobs = sortedJobs.map((job) => ({
+      id: job._id,
+      employerName: job.employerId?.name,
+      title: job.title,
+      description: job.description,
+      requirements: job.requirements,
+      salary: job.salary,
+      salaryRange: job.salaryRange,
+      salaryRangeUnit: job.salaryRangeUnit,
+      deliveryTime: job.deliveryTime,
+      priorityLevel: job.priorityLevel,
+      createdAt: job.createdAt,
+      location: job.location,
+      experience: job.experience,
+      industry: job.industry,
+      position: job.position,
+      level: job.level,
+      views: job.views,
+      status: job.status,
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "AI-recommended jobs fetched successfully",
+      data: formattedJobs,
+    });
+  } catch (error) {
+    // If this fails, the frontend can call the other /recommended endpoint
     next(error);
   }
 };
@@ -839,10 +1066,13 @@ export const getRecommendedJobs = async (req, res, next) => {
 export const getExpiredJobs = async (req, res, next) => {
   try {
     // Check authorization
-    if (req.user.accountType !== 'Admin' && req.user.accountType !== 'Nhà Tuyển Dụng') {
+    if (
+      req.user.accountType !== "Admin" &&
+      req.user.accountType !== "Nhà Tuyển Dụng"
+    ) {
       return res.status(403).json({
         success: false,
-        message: "Only admins and recruiters can view expired jobs"
+        message: "Only admins and recruiters can view expired jobs",
       });
     }
 
@@ -852,9 +1082,9 @@ export const getExpiredJobs = async (req, res, next) => {
     // Find expired jobs (deadline passed)
     const expiredJobs = await Job.find({
       deadline: { $lt: new Date() },
-      status: 'active'
+      status: "active",
     })
-      .populate('employerId', 'name')
+      .populate("employerId", "name")
       .sort({ deadline: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -862,29 +1092,29 @@ export const getExpiredJobs = async (req, res, next) => {
     // Get total count
     const totalExpiredJobs = await Job.countDocuments({
       deadline: { $lt: new Date() },
-      status: 'active'
+      status: "active",
     });
 
     res.status(200).json({
       success: true,
       message: "Expired jobs fetched successfully",
       data: {
-        jobs: expiredJobs.map(job => ({
+        jobs: expiredJobs.map((job) => ({
           id: job._id,
           title: job.title,
           employerName: job.employerId.name,
           deadline: job.deadline,
           createdAt: job.createdAt,
-          views: job.views
+          views: job.views,
         })),
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalExpiredJobs / limit),
           totalExpiredJobs,
           hasNextPage: page * limit < totalExpiredJobs,
-          hasPrevPage: page > 1
-        }
-      }
+          hasPrevPage: page > 1,
+        },
+      },
     });
   } catch (error) {
     next(error);
@@ -905,28 +1135,28 @@ export const getRelatedJobs = async (req, res, next) => {
     const referenceJob = await Job.findById(id);
 
     if (!referenceJob) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Reference job not found" 
+        message: "Reference job not found",
       });
     }
 
     // Build query for related jobs
     const relatedQuery = {
       _id: { $ne: id }, // Exclude the reference job
-      status: 'active',
+      status: "active",
       isHidden: false,
       $or: [
         { industry: referenceJob.industry },
         { position: referenceJob.position },
         { location: referenceJob.location },
-        { level: referenceJob.level }
-      ]
+        { level: referenceJob.level },
+      ],
     };
 
-    // Add skills matching if available
-    if (referenceJob.skills && referenceJob.skills.length > 0) {
-      relatedQuery.skills = { $in: referenceJob.skills };
+    // Add skillIds matching if available
+    if (referenceJob.skillIds && referenceJob.skillIds.length > 0) {
+      relatedQuery.skillIds = { $in: referenceJob.skillIds };
     }
 
     // Get related jobs
@@ -951,9 +1181,9 @@ export const getRelatedJobs = async (req, res, next) => {
           level: job.level,
           priorityLevel: job.priorityLevel,
           createdAt: job.createdAt,
-          deadline: job.deadline
+          deadline: job.deadline,
         };
-      })
+      }),
     );
 
     res.status(200).json({
@@ -965,10 +1195,10 @@ export const getRelatedJobs = async (req, res, next) => {
           title: referenceJob.title,
           industry: referenceJob.industry,
           position: referenceJob.position,
-          location: referenceJob.location
+          location: referenceJob.location,
         },
-        relatedJobs: formattedJobs
-      }
+        relatedJobs: formattedJobs,
+      },
     });
   } catch (error) {
     next(error);
@@ -980,17 +1210,31 @@ export const getRelatedJobs = async (req, res, next) => {
 // Existing functions (keeping for backward compatibility)
 export const getFilterOptions = async (req, res, next) => {
   try {
-    // Get unique locations
-    const locations = await Job.distinct("location");
+    // Lấy danh sách location duy nhất từ DB
+    const rawLocations = await Job.distinct("location");
 
-    // Get unique positions
+    // Lấy phần sau dấu ',' cuối cùng
+    const locations = rawLocations
+      .map((loc) => {
+        if (typeof loc !== "string") return "";
+        const parts = loc.split(",");
+        return parts[parts.length - 1].trim(); // phần sau dấu ',' cuối cùng
+      })
+      .filter((loc) => loc) // bỏ rỗng
+      .filter((value, index, self) => self.indexOf(value) === index); // lọc trùng
+
+    // Các filter khác giữ nguyên
     const positions = await Job.distinct("position");
 
     // Get unique industries
-    const industries = await Job.distinct("industry");
+    const industries = await JobCategory.find({ parentId: null }).select(
+      "_id name",
+    );
 
-    // Get unique levels
-    const levels = await Job.distinct("level");
+    // Get fields with enum associated with them
+    const levels = levelEnum;
+    const experiences = experienceEnum;
+    const salaryRangeUnits = salaryRangeUnitEnum;
 
     res.status(200).json({
       success: true,
@@ -1000,6 +1244,8 @@ export const getFilterOptions = async (req, res, next) => {
         positions,
         industries,
         levels,
+        experiences,
+        salaryRangeUnits,
       },
     });
   } catch (error) {
@@ -1085,7 +1331,7 @@ export const getMonthlyJobStats = async (req, res) => {
 export const getQuarterlyJobStats = async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const startDate = new Date(year, 0, 1);   // Jan 1
+    const startDate = new Date(year, 0, 1); // Jan 1
     const endDate = new Date(year + 1, 0, 1); // Jan 1 next year
 
     const stats = await Job.aggregate([
@@ -1194,3 +1440,293 @@ export const getYearlyJobStats = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch yearly job stats" });
   }
 };
+
+// Job Status Distribution
+export const getJobStatusDistribution = async (req, res) => {
+  try {
+    const stats = await Job.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    const result = {};
+    stats.forEach(({ _id, count }) => {
+      result[_id] = count;
+    });
+    res.json({ data: result });
+  } catch (err) {
+    console.error("Error fetching job status distribution:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Jobs by Category
+export const getJobsByCategory = async (req, res) => {
+  try {
+    const stats = await Job.aggregate([
+      {
+        $group: {
+          _id: "$industry",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    res.json({
+      data: stats.map(({ _id, count }) => ({
+        category: _id || "Uncategorized",
+        count,
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching jobs by category:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Jobs Posted Over Time (by month, all years)
+export const getJobsPostedOverTime = async (req, res) => {
+  try {
+    const stats = await Job.aggregate([
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { "_id.year": 1, "_id.month": 1 },
+      },
+    ]);
+    const result = {};
+    stats.forEach(({ _id, count }) => {
+      const key = `${_id.year}-${String(_id.month).padStart(2, "0")}`;
+      result[key] = count;
+    });
+    res.json({ data: result });
+  } catch (err) {
+    console.error("Error fetching jobs posted over time:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Validation middleware for creating a job
+export const validateCreateJob = [
+  body("title")
+    .trim()
+    .notEmpty()
+    .withMessage("Title is required")
+    .isLength({ min: 5, max: 100 })
+    .withMessage("Title must be 5-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
+    .withMessage("Title must be valid and not random characters"),
+  body("description")
+    .trim()
+    .notEmpty()
+    .withMessage("Description is required")
+    .isLength({ min: 20, max: 2000 })
+    .withMessage("Description must be 20-2000 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.,-]+$/u)
+    .withMessage("Description must be valid and not random characters"),
+  body("requirements")
+    .trim()
+    .notEmpty()
+    .withMessage("Requirements are required"),
+
+  // Validate business rule
+  // Ensure that either salary (string) or salaryRange (salaryRange.start, salaryRange.end, and salaryRangeUnit) is provided
+  body("salary").custom((value, { req }) => {
+    const { salary, salaryRange, salaryRangeUnit } = req.body;
+    const hasTextSalary = check.nonEmptyString(salary);
+
+    // If req.body.salaryRange have both the start end end field (both must not be undefined or null)
+    const hasValidSalaryRange =
+      check.all(
+        check.map(salaryRange, {
+          start: check.assigned,
+          end: check.assigned,
+        }),
+      ) && check.assigned(salaryRangeUnit);
+
+    if (hasTextSalary || hasValidSalaryRange) {
+      return true;
+    }
+    throw new Error(
+      "Either salary (string) or a complete salaryRange (object with start/end, alongside salaryRangeUnit) must be provided",
+    );
+  }),
+
+  body("salary")
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Salary must be 2-50 characters"),
+  body("salaryRange.start").optional().isNumeric().toInt(), // parses
+  body("salaryRange.end").optional().isNumeric().toInt(), // parses
+  body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),
+
+  body("deliveryTime").optional(),
+  body("priorityLevel")
+    .optional()
+    .isIn(["Nổi bật", "Thông thường"])
+    .withMessage("Invalid priority level"),
+  body("quantity")
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage("Quantity must be a positive integer (1-1000)"),
+  body("level").optional(),
+  body("industry")
+    .optional()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Industry must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
+    .withMessage("Industry must be valid and not random characters"),
+  body("position")
+    .optional()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Position must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
+    .withMessage("Position must be valid and not random characters"),
+  body("location")
+    .optional()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Location must be 2-100 characters")
+    .matches(/^[a-zA-Z0-9À-ý\s'.-]+$/u)
+    .withMessage("Location must be valid and not random characters"),
+  body("experience").optional(),
+  body("deadline")
+    .optional()
+    .isISO8601()
+    .withMessage("Deadline must be a valid date"),
+  body("keywords")
+    .optional()
+    .isArray()
+    .withMessage("Keywords must be an array"),
+  body("skillIds")
+    .optional()
+    .isArray()
+    .withMessage("Skills must be an array of skill IDs.")
+    .custom((skillIds) => {
+      if (skillIds) {
+        for (const skillId of skillIds) {
+          if (!Types.ObjectId.isValid(skillId)) {
+            throw new Error(`Invalid skill ID provided: ${skillId}`);
+          }
+        }
+      }
+      return true; // Return true if all IDs are valid
+    }),
+  body("categoryId").isMongoId().withMessage("Invalid ObjectId format"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    console.log(req.body);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Validation middleware for updating a job (fields optional but must be valid if present)
+export const validateUpdateJob = [
+  param("id").isMongoId().withMessage("Invalid job ID"),
+  body("title")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Title cannot be empty")
+    .isLength({ min: 5, max: 100 })
+    .withMessage("Title must be 5-100 characters"),
+  body("description")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Description cannot be empty")
+    .isLength({ min: 20, max: 2000 })
+    .withMessage("Description must be 20-2000 characters"),
+  body("requirements")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("Requirements cannot be empty"),
+  body("salary")
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Salary must be 2-50 characters"),
+  body("salaryRange.start").optional().isNumeric(),
+  body("salaryRange.end").optional().isNumeric(),
+  body("salaryRangeUnit").optional().isIn(salaryRangeUnitEnum),
+  body("deliveryTime").optional(),
+  body("priorityLevel").optional().isIn(["Nổi bật", "Thông thường"]),
+  body("quantity").optional().isInt({ min: 1 }),
+  body("level").optional().isIn(levelEnum),
+  body("industry").optional().trim(),
+  body("position").optional().trim(),
+  body("location").optional().trim(),
+  body("experience").optional().isIn(experienceEnum),
+  body("deadline").optional().isISO8601().toDate(),
+  body("keywords").optional().isArray(),
+  body("skillIds")
+    .optional()
+    .isArray()
+    .withMessage("Skills must be an array of skill IDs.")
+    .custom((skillIds) => {
+      if (skillIds) {
+        for (const skillId of skillIds) {
+          if (!mongoose.Types.ObjectId.isValid(skillId)) {
+            throw new Error(`Invalid skill ID provided: ${skillId}`);
+          }
+        }
+      }
+      return true;
+    }),
+  body("categoryId").optional().isMongoId().withMessage("Invalid category ID."),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Validation for updating job status
+export const validateUpdateJobStatus = [
+  param("id").isMongoId().withMessage("Invalid job ID"),
+  body("status")
+    .notEmpty()
+    .withMessage("Status is required")
+    .isIn(["active", "inactive", "pending", "approved", "rejected", "flagged"])
+    .withMessage("Invalid status value"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];
+
+// Validation for updating application status
+export const validateUpdateApplicationStatus = [
+  param("id").isMongoId().withMessage("Invalid job ID"),
+  param("applicantId").isMongoId().withMessage("Invalid applicant ID"),
+  body("status")
+    .notEmpty()
+    .withMessage("Status is required")
+    .isIn(["Pending", "Phỏng vấn", "Từ chối", "Mới nhận"])
+    .withMessage("Invalid status value"),
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    next();
+  },
+];

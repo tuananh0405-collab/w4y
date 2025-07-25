@@ -6,9 +6,14 @@ import toObjectId from "../utils/toObjectId.js";
 import Application from "../models/application.model.js";
 import Job from "../models/job.model.js";
 
+/**
+ * GET /api/v1/chat/token
+ * Generate a chat token for socket authentication
+ * Allowed Roles: Authenticated users
+ */
 export const getChatToken = (req, res, next) => {
   try {
-    const { senderId } = req.query;
+    const senderId = req.user._id;
 
     const chatToken = jwt.sign({ senderId }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN, // For now
@@ -24,47 +29,89 @@ export const getChatToken = (req, res, next) => {
   }
 };
 
-export const getChatHistory = async (req, res, next) => {
+/**
+ * GET /api/v1/chat/messages
+ * Get a paginated list of messages between two users
+ * Allowed Roles: Authenticated users
+ */
+export const getMessages = async (req, res, next) => {
   try {
-    const { senderId, receiverId } = req.query;
+    const { senderId, receiverId, page = 1, limit = 20 } = req.query;
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.max(1, parseInt(limit));
 
     if (!senderId) {
       res.status(400).json({
         success: false,
         message: `Missing senderId (${senderId})`,
         data: [],
+        pagination: {
+          currentPage: pageNum,
+          totalPages: 0,
+          totalItems: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
       });
       return;
     }
 
-    // Not an error because this acts as like a standby mode
     if (!receiverId || receiverId === "null") {
       res.status(200).json({
         success: false,
         message: `Empty list due to missing receiverId (${receiverId})`,
         data: [],
+        pagination: {
+          currentPage: pageNum,
+          totalPages: 0,
+          totalItems: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
       });
       return;
     }
 
-    const messageList = await ChatMessage.find({
+    const chatQuery = {
       $or: [
         { senderId: senderId, receiverId: receiverId },
         { receiverId: senderId, senderId: receiverId },
       ],
-    }).sort({ sentAt: -1 });
+    };
+
+    const totalItems = await ChatMessage.countDocuments(chatQuery);
+    const totalPages = Math.ceil(totalItems / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    const messageList = await ChatMessage.find(chatQuery)
+      .sort({ sentAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
 
     res.status(200).json({
       success: true,
-      message: `Fetched message list by ${senderId} and ${receiverId} (${messageList.length})`,
+      message: `Fetched message list between ${senderId} and ${receiverId} (${messageList.length})`,
       data: messageList,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalItems,
+        hasNextPage,
+        hasPrevPage,
+      },
     });
   } catch (error) {
     next(error);
   }
 };
 
-export const getRecentMessagedUsers = async (req, res, next) => {
+/**
+ * GET /api/v1/chat/conversations
+ * Get a list of users that the specific user has messages with
+ * Allowed Roles: Authenticated users
+ */
+export const getConversations = async (req, res, next) => {
   try {
     // const senderId = req.user._id;
     let { senderId, query } = req.query;
@@ -148,7 +195,12 @@ export const getRecentMessagedUsers = async (req, res, next) => {
   }
 };
 
-/* Get a list recruiters whose job the applicant applied
+/**
+ * GET /api/v1/chat/recruiters-by-applications
+ * Get a list of recruiters grouped by applications for a specific applicant
+ * Allowed Roles: Authenticated users
+ */
+/* Return format:
  * [
  *   recruiter: User,
  *   jobs: [{
@@ -213,7 +265,12 @@ export const getRecruitersGroupedByApplications = async (req, res, next) => {
   }
 };
 
-/* Get a list applicants who applied for a job that the recruiter posted
+/**
+ * GET /api/v1/chat/applicants-by-applications
+ * Get a list of applicants grouped by applications for recruiter's active jobs
+ * Allowed Roles: Authenticated users
+ */
+/* Return format:
  * [
  *   recruiter: User,
  *   jobs: [{
@@ -285,6 +342,122 @@ export const getApplicantsGroupedByApplications = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `Fetched ${results.length} record(s)`,
+      data: results,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PATCH /api/v1/chat/mark-read
+ * Mark messages as read by IDs
+ * Allowed Roles: Authenticated users
+ */
+export const markMessagesAsRead = async (req, res, next) => {
+  try {
+    const { messageIds, is_read = true } = req.body;
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "messageIds (array) is required",
+        data: [],
+      });
+    }
+
+    // Validate ObjectIds
+    const validIds = messageIds.filter((id) =>
+      mongoose.Types.ObjectId.isValid(id),
+    );
+    if (validIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid message IDs provided",
+        data: [],
+      });
+    }
+
+    const result = await ChatMessage.updateMany(
+      { _id: { $in: validIds } },
+      { $set: { is_read } },
+    );
+
+    const modifiedMessages = await ChatMessage.find({
+      _id: { $in: validIds },
+      is_read,
+    }).select("_id");
+
+    const modifiedIds = modifiedMessages.map((doc) => doc._id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Updated ${result.modifiedCount} message(s)`,
+      data: { ...result, modifiedIds, is_read },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/chat/unread-messages-senders
+ * Get a list of users who have sent unread messages to the user
+ * Allowed Roles: Authenticated users
+ */
+export const getUnreadMessagesSenders = async (req, res, next) => {
+  try {
+    let { startDate, endDate } = req.query;
+    const userId = req.user._id;
+    const query = {
+      receiverId: userId,
+      is_read: false,
+    };
+    if (startDate || endDate) {
+      query.sentAt = {};
+      if (startDate) query.sentAt.$gte = new Date(startDate);
+      if (endDate) query.sentAt.$lte = new Date(endDate);
+    }
+
+    const results = await ChatMessage.aggregate([
+      { $match: query },
+      {
+        $sort: { sentAt: -1 },
+      },
+      {
+        $group: {
+          _id: "$senderId",
+          unreadCount: { $sum: 1 },
+          latestMessage: { $first: "$message" },
+          latestSentAt: { $first: "$sentAt" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "sender",
+        },
+      },
+      { $unwind: "$sender" },
+      {
+        $project: {
+          _id: 0,
+          senderId: "$sender._id",
+          name: "$sender.name",
+          email: "$sender.email",
+          avatarUrl: "$sender.avatarUrl",
+          unreadCount: 1,
+          latestMessage: 1,
+          latestSentAt: 1,
+        },
+      },
+      { $sort: { latestSentAt: -1 } },
+    ]);
+    return res.status(200).json({
+      success: true,
+      message: `Fetched ${results.length} sender(s) with unread messages`,
       data: results,
     });
   } catch (err) {

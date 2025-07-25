@@ -138,24 +138,41 @@ export const viewApplicationStatus = async (req, res, next) => {
   };
 
 
-// Ứng dụng có thể nhận query param: jobIds=job1,job2,job3
 export const getApplications = async (req, res, next) => {
-   try {
-    // Có thể lọc theo employerId (từ jobs) hoặc jobIds theo query param
+  try {
     const { employerId } = req.query;
 
+    // Build filter for applications
     let filter = {};
     if (employerId) {
-      // Lấy danh sách jobId của employer này
-      const jobs = await Job.find({ employerId }, '_id');
-      const jobIds = jobs.map(j => j._id);
+      const jobs = await Job.find({ employerId }, '_id').lean();
+      const jobIds = jobs.map((j) => j._id);
       filter.jobId = { $in: jobIds };
     }
 
-    const applications = await Application.find(filter)
-      .populate('applicantId', 'name experience') // lấy tên và kinh nghiệm user
-      .populate('jobId', 'position createdAt')   // lấy vị trí và ngày tạo job
+    // Fetch applications with populated fields
+    let applications = await Application.find(filter)
+      .populate('applicantId', 'name experience email phone city skills userDetail')
+      .populate('jobId', 'position createdAt')
+      .lean()
       .exec();
+
+    // Merge ApplicantProfile data into each application
+    for (let i = 0; i < applications.length; i++) {
+      const application = applications[i];
+      if (application.applicantId?._id) {
+        const profile = await ApplicantProfile.findOne({ userId: application.applicantId._id }).lean();
+        if (profile) {
+          // Update applicantId fields with profile data, preserving existing values if profile fields are undefined
+          applications[i].applicantId = {
+            ...application.applicantId,
+            userDetail: profile.userDetail || application.applicantId.userDetail,
+            experience: profile.experience || application.applicantId.experience,
+            skills: profile.skills || application.applicantId.skills,
+          };
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -163,6 +180,7 @@ export const getApplications = async (req, res, next) => {
       data: applications,
     });
   } catch (error) {
+    console.error('Error fetching applications:', error);
     next(error);
   }
 };
@@ -242,6 +260,227 @@ Trân trọng,
       success: true,
       message: 'Cập nhật trạng thái thành công và gửi mail thông báo.',
       data: application,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// List jobs a user has applied for, with pagination and advanced search
+export const listAppliedJobs = async (req, res, next) => {
+  try {
+    const applicantId = req.user._id;
+    const { page = 1, limit = 10, search = "" } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Build search filter for job fields
+    let jobSearchFilter = {};
+    if (search && search.trim() !== "") {
+      const regex = new RegExp(search, "i");
+      jobSearchFilter = {
+        $or: [
+          { title: regex },
+          { description: regex },
+          { salary: regex },
+          { position: regex },
+          { location: regex },
+        ],
+      };
+    }
+
+    // Find applications for this user
+    const applications = await Application.find({ applicantId })
+      .populate({
+        path: "jobId",
+        match: jobSearchFilter,
+        select: "title description salary position location employerId experience",
+        populate: { path: "employerId", select: "name" },
+      })
+      .sort({ appliedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Filter out applications where jobId is null (not matching search)
+    const filteredApplications = applications.filter(app => app.jobId);
+
+    // Get total count for pagination
+    const totalApplications = await Application.countDocuments({
+      applicantId,
+    });
+    // If searching, count only those matching jobs
+    let totalFiltered = totalApplications;
+    if (search && search.trim() !== "") {
+      // Count applications with jobs matching the search
+      const allApps = await Application.find({ applicantId }).populate({
+        path: "jobId",
+        match: jobSearchFilter,
+        select: "_id",
+      });
+      totalFiltered = allApps.filter(app => app.jobId).length;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Applied jobs fetched successfully",
+      data: filteredApplications.map(app => ({
+        job: {
+          id: app.jobId._id,
+          title: app.jobId.title,
+          description: app.jobId.description,
+          salary: app.jobId.salary,
+          position: app.jobId.position,
+          location: app.jobId.location,
+          experience: app.jobId.experience,
+          employerName: app.jobId.employerId?.name || "",
+        },
+        appliedAt: app.appliedAt,
+        resumeFile: app.resumeFile,
+      })),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalFiltered / limit),
+        totalApplications: totalFiltered,
+        hasNextPage: page * limit < totalFiltered,
+        hasPrevPage: page > 1,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Application Status Distribution
+export const getApplicationStatusDistribution = async (req, res) => {
+  try {
+    const stats = await Application.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    const result = {};
+    stats.forEach(({ _id, count }) => {
+      result[_id] = count;
+    });
+    res.json({ data: result });
+  } catch (err) {
+    console.error("Error fetching application status distribution:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Applications by Job
+export const getApplicationsByJob = async (req, res) => {
+  try {
+    const stats = await Application.aggregate([
+      {
+        $group: {
+          _id: "$jobId",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      },
+      {
+        $limit: 20 // Limit to top 20 jobs for performance
+      },
+      {
+        $lookup: {
+          from: "jobs",
+          localField: "_id",
+          foreignField: "_id",
+          as: "job"
+        }
+      },
+      {
+        $unwind: { path: "$job", preserveNullAndEmptyArrays: true }
+      },
+      {
+        $project: {
+          jobTitle: "$job.title",
+          count: 1
+        }
+      }
+    ]);
+    res.json({
+      data: stats.map(({ jobTitle, count, _id }) => ({
+        job: jobTitle || _id?.toString() || "Unknown",
+        count
+      }))
+    });
+  } catch (err) {
+    console.error("Error fetching applications by job:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Applications Submitted Over Time (by month, all years)
+export const getApplicationsSubmittedOverTime = async (req, res) => {
+  try {
+    const stats = await Application.aggregate([
+      {
+        $group: {
+          _id: {
+            year: { $year: "$appliedAt" },
+            month: { $month: "$appliedAt" }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { "_id.year": 1, "_id.month": 1 }
+      }
+    ]);
+    const result = {};
+    stats.forEach(({ _id, count }) => {
+      const key = `${_id.year}-${String(_id.month).padStart(2, "0")}`;
+      result[key] = count;
+    });
+    res.json({ data: result });
+  } catch (err) {
+    console.error("Error fetching applications submitted over time:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Get all applications (admin)
+export const getAllApplications = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, sortField = "appliedAt", sortOrder = "desc" } = req.query;
+    const skip = (page - 1) * limit;
+    const sort = { [sortField]: sortOrder === "asc" ? 1 : -1 };
+
+    // Find all applications with applicant and job info
+    const applications = await Application.find()
+      .populate({ path: "applicantId", select: "name email" })
+      .populate({ path: "jobId", select: "title" })
+      .sort(sort)
+      .skip(Number(skip))
+      .limit(Number(limit));
+
+    const total = await Application.countDocuments();
+
+    res.status(200).json({
+      success: true,
+      message: "All applications fetched successfully",
+      data: applications.map(app => ({
+        id: app._id,
+        applicantName: app.applicantId?.name || "",
+        applicantEmail: app.applicantId?.email || "",
+        jobTitle: app.jobId?.title || "",
+        status: app.status,
+        appliedAt: app.appliedAt,
+      })),
+      pagination: {
+        currentPage: Number(page),
+        totalPages: Math.ceil(total / limit),
+        totalApplications: total,
+        hasNextPage: page * limit < total,
+        hasPrevPage: page > 1,
+      },
     });
   } catch (error) {
     next(error);

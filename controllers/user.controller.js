@@ -9,10 +9,11 @@ import cloudinary from '../config/cloudinary.js';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
 import path from 'path';
+import { buildMongoFilters } from "../utils/buildMongoFilters.js";
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params:{
+  params: {
     resource_type: 'raw',
     public_id: (req, file) => {
       const ext = path.extname(file.originalname);
@@ -48,13 +49,14 @@ export const getUser = async (req, res, next) => {
     const userId = req.user._id;
 
     // Tìm user lấy thông tin cơ bản
-    const user = await User.findById(userId).select('name email phone avatarUrl');
+    const user = await User.findById(userId).select('name email phone city district avatarUrl');
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     // Tìm ApplicantProfile theo userId lấy skills, education
-    const profile = await ApplicantProfile.findOne({ userId }).select('skills education jobTitle resumeFiles');
+    const profile = await ApplicantProfile.findOne({ userId }).select('skills education jobTitle resumeFiles userDetail level openToWork timeWork experience');
+
 
     res.status(200).json({
       success: true,
@@ -62,11 +64,18 @@ export const getUser = async (req, res, next) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
+        city: user.city,
+        district: user.district,
         skills: profile?.skills || [],
         education: profile?.education || '',
         jobTitle: profile?.jobTitle || '',
         resumeFiles: profile?.resumeFiles || [],
         avatarUrl: user.avatarUrl || '',
+        userDetail: profile?.userDetail || '',
+        level: profile?.level || '',
+        openToWork: profile?.openToWork || '',
+        timeWork: profile?.timeWork || '',
+        experience: profile?.experience || '',
       },
     });
   } catch (error) {
@@ -74,7 +83,7 @@ export const getUser = async (req, res, next) => {
   }
 };
 
-export const updateUserByID = async (req, res) => {
+export const updateUserByID = async (req, res, next) => {
   try {
     // Lấy userId từ JWT trong cookie
     const userId = req.user._id;
@@ -176,18 +185,6 @@ export const updateUserProfile = async (req, res, next) => {
     user.district = req.body.district || user.district;
 
     await user.save();
-
-    // Cập nhật hoặc tạo ApplicantProfile (skills, jobTitle)
-    let profile = await ApplicantProfile.findOne({ userId });
-    if (!profile) {
-      profile = new ApplicantProfile({ userId });
-    }
-
-    profile.jobTitle = req.body.jobTitle || profile.jobTitle;
-    profile.skills = req.body.skills || profile.skills; // expects array of strings
-
-    await profile.save();
-
     res.status(200).json({
       success: true,
       data: {
@@ -197,10 +194,6 @@ export const updateUserProfile = async (req, res, next) => {
           phone: user.phone,
           city: user.city,
           district: user.district,
-        },
-        profile: {
-          jobTitle: profile.jobTitle,
-          skills: profile.skills,
         }
       }
     });
@@ -404,6 +397,130 @@ export const getYearlyUserGrowth = async (req, res) => {
     res.json({ years: [startYear, startYear + 1, startYear + 2, endYear], data: yearlyData });
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch yearly user growth", error: err.message });
+  }
+};
+
+export const getUserList = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      pageSize = 10,
+      sortField = "createdAt",
+      sortOrder = "desc",
+      filters = [],
+    } = req.query;
+
+    const parsedFilters = typeof filters === "string" ? JSON.parse(filters) : filters;
+
+    const filterQuery = buildMongoFilters(parsedFilters);
+
+    // Exclude Admins
+    filterQuery.accountType = { $ne: "Admin" };
+
+    const skip = (Number(page) - 1) * Number(pageSize);
+
+    const total = await User.countDocuments(filterQuery);
+
+    const users = await User.find(filterQuery)
+      .sort({ [sortField]: sortOrder === "desc" ? -1 : 1 })
+      .skip(skip)
+      .limit(Number(pageSize));
+
+    res.json({
+      users,
+      total,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getTopCities = async (req, res) => {
+  try {
+    const topCities = await User.aggregate([
+      { 
+        $match: { city: { $ne: null, $ne: "" } } 
+      },
+      {
+        $group: {
+          _id: "$city",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      },
+      {
+        $limit: 10
+      },
+      {
+        $project: {
+          _id: 0,
+          city: "$_id",
+          count: 1
+        }
+      }
+    ]);
+
+    res.json(topCities);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getAgeGenderPyramid = async (req, res) => {
+  try {
+    const pyramid = await User.aggregate([
+      {
+        $match: {
+          dateOfBirth: { $ne: null },
+          gender: { $in: ["male", "female"] },
+        },
+      },
+      {
+        $addFields: {
+          age: {
+            $subtract: [
+              { $year: new Date() },
+              { $year: "$dateOfBirth" },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$age",
+          male: {
+            $sum: {
+              $cond: [{ $eq: ["$gender", "male"] }, 1, 0],
+            },
+          },
+          female: {
+            $sum: {
+              $cond: [{ $eq: ["$gender", "female"] }, 1, 0],
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          age: "$_id",
+          male: 1,
+          female: 1,
+        },
+      },
+      {
+        $sort: { age: 1 }, 
+      },
+    ]);
+
+    res.json(pyramid);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

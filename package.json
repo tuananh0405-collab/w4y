@@ -6,20 +6,35 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon app.js",
-    "start": "node app.js"
+    "start": "node app.js",
+    "test:unit": "jest --config=__tests__/config/jest.unit.config.cjs --detectOpenHandles --runInBand --forceExit",
+    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules PORT=3004 jest --config=__tests__/config/jest.integration.config.cjs --detectOpenHandles --runInBand --forceExit",
+    "test:e2e": "cross-env NODE_OPTIONS=--experimental-vm-modules PORT=3005 jest --config=__tests__/config/jest.e2e.config.cjs --detectOpenHandles --runInBand --forceExit",
+    "test": "npm-run-all --parallel test:unit test:integration test:e2e",
+    "test:user": "jest __tests__/unit/user.unit.test.js --config=__tests__/config/jest.unit.config.cjs",
+    "test:user:watch": "jest __tests__/unit/user.unit.test.js --config=__tests__/config/jest.unit.config.cjs --watch",
+    "test:user:coverage": "jest __tests__/unit/user.unit.test.js --config=__tests__/config/jest.unit.config.cjs --coverage"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.835.0",
+    "@aws-sdk/s3-request-presigner": "^3.835.0",
+    "@chroma-core/openai": "^0.1.7",
+    "@google-analytics/data": "^5.2.0",
     "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
+    "check-types": "^11.2.3",
+    "chromadb": "^3.0.9",
     "cloudinary": "^1.41.3",
+    "convertapi": "^1.15.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.14.2",
     "mongoose": "^8.12.1",
@@ -27,8 +42,21 @@
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^6.10.0",
     "nodemon": "^3.1.9",
-    "socket.io": "^4.8.1",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0"
+    "passport-google-oauth20": "^2.0.0",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.27.2",
+    "@types/supertest": "^6.0.3",
+    "babel-jest": "^30.0.2",
+    "cross-env": "^7.0.3",
+    "jest": "^30.0.3",
+    "jest-puppeteer": "^11.0.0",
+    "mongodb-memory-server": "^10.1.4",
+    "npm-run-all": "^4.1.5",
+    "puppeteer": "^24.10.2",
+    "supertest": "^7.1.1"
   }
 }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   // Basic CRUD operations
   createJobPosting,
+
   viewJobList,
   viewJobDetail,
   updateJob,
@@ -33,33 +34,68 @@ import {
   getMonthlyJobStats,
   getQuarterlyJobStats,
   getYearlyJobStats,
+  validateCreateJob,
+  validateUpdateJob,
+  validateUpdateJobStatus,
+  validateUpdateApplicationStatus,
+  getAIRecommendedJobs,
+  getJobStatusDistribution,
+  getJobsByCategory,
+  getJobsPostedOverTime,
 } from "../controllers/job.controller.js";
-import { authenticate } from "../middlewares/auth.middleware.js";
+import { authenticate, authorizeAdmin } from "../middlewares/auth.middleware.js";
 
 const jobRouter = Router();
 
+jobRouter.post("/create", authenticate, validateCreateJob, createJobPosting);
+jobRouter.get("/list", viewJobList);
+jobRouter.get("/get-by-employer/:employerId", getJobsByEmployer);
+jobRouter.get("/get-filter-options", getFilterOptions);
+jobRouter.get("/detail/:jobId", viewJobDetail);
+jobRouter.put("/update/:jobId", authenticate, validateUpdateJob, updateJob);
+jobRouter.delete("/delete/:jobId", authenticate, deleteJob);
 // ===== ADMIN DASHBOARD FEATURES =====
 /**
  * GET /api/v1/job/stats/monthly
  * Get monthly job statistics for the admin dashboard
  * Allowed Roles: Admin
  */
-//admin athen required
-jobRouter.get("/stats/monthly", getMonthlyJobStats);
+jobRouter.get("/stats/monthly",authenticate, authorizeAdmin, getMonthlyJobStats);
 
 /**
  * GET /api/v1/job/stats/quarterly
  * Get quarterly job statistics for the admin dashboard
  * Allowed Roles: Admin
  */ 
-jobRouter.get("/stats/quarterly", getQuarterlyJobStats);
+jobRouter.get("/stats/quarterly",authenticate, authorizeAdmin, getQuarterlyJobStats);
 
 /**
  * GET /api/v1/job/stats/yearly
  * Get yearly job statistics for the admin dashboard
  * Allowed Roles: Admin
  */
-jobRouter.get("/stats/yearly", getYearlyJobStats);
+jobRouter.get("/stats/yearly",authenticate, authorizeAdmin, getYearlyJobStats);
+
+/**
+ * GET /api/v1/job/stats/status-distribution
+ * Get job status distribution for admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/status-distribution", authenticate, authorizeAdmin, getJobStatusDistribution);
+
+/**
+ * GET /api/v1/job/stats/by-category
+ * Get jobs by category for admin dashboard
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/by-category", authenticate, authorizeAdmin, getJobsByCategory);
+
+/**
+ * GET /api/v1/job/stats/posted-over-time
+ * Get jobs posted over time (by month, all years)
+ * Allowed Roles: Admin
+ */
+jobRouter.get("/stats/posted-over-time", authenticate, authorizeAdmin, getJobsPostedOverTime);
 
 // ===== BASIC CRUD OPERATIONS =====
 
@@ -68,7 +104,7 @@ jobRouter.get("/stats/yearly", getYearlyJobStats);
  * Create a new job post
  * Allowed Roles: Recruiter (Nhà Tuyển Dụng)
  */
-jobRouter.post("/", authenticate, createJobPosting);
+jobRouter.post("/", authenticate, validateCreateJob, createJobPosting);
 
 /**
  * GET /api/v1/job
@@ -82,15 +118,21 @@ jobRouter.get("/", viewJobList);
  * Get an overview of job posts
  * Allowed Roles: Admin
  */
-//authenticate required
-jobRouter.get("/overview", getJobOverview);
+jobRouter.get("/overview",authenticate, authorizeAdmin, getJobOverview);
 
 /**
  * GET /api/v1/job/recommended
- * Get AI-recommended jobs for the logged-in applicant
+ * Get filter-based job recommendations for the logged-in applicant
  * Allowed Roles: Applicant
  */
 jobRouter.get("/recommended", authenticate, getRecommendedJobs);
+
+/**
+ * GET /api/v1/job/ai-recommended
+ * Get AI-powered job recommendations for the logged-in applicant using ChromaDB.
+ * Allowed Roles: Applicant
+ */
+jobRouter.get("/ai-recommended", authenticate, getAIRecommendedJobs);
 
 /**
  * GET /api/v1/job/expired
@@ -118,7 +160,7 @@ jobRouter.get("/:id", viewJobDetail);
  * Update an existing job post
  * Allowed Roles: Recruiter (owner of the job)
  */
-jobRouter.put("/:id", authenticate, updateJob);
+jobRouter.put("/:id", authenticate, validateUpdateJob, updateJob);
 
 /**
  * DELETE /api/v1/job/:id
@@ -141,7 +183,7 @@ jobRouter.put("/:id/hide", authenticate, hideJob);
  * Change the status of a job
  * Allowed Roles: Admin
  */
-jobRouter.patch("/:id/status", authenticate, updateJobStatus);
+jobRouter.patch("/:id/status", authenticate, authorizeAdmin, validateUpdateJobStatus, updateJobStatus);
 
 /**
  * POST /api/v1/job/:id/view
@@ -149,8 +191,6 @@ jobRouter.patch("/:id/status", authenticate, updateJobStatus);
  * Allowed Roles: All (but typically called by frontend)
  */
 jobRouter.post("/:id/view", trackJobView);
-
-
 
 // ===== RECRUITER SPECIFIC =====
 
@@ -182,7 +222,7 @@ jobRouter.get("/:id/applicants", authenticate, getJobApplicants);
  * Update the application status of an applicant
  * Allowed Roles: Recruiter (owner of the job)
  */
-jobRouter.patch("/:id/applications/:applicantId", authenticate, updateApplicationStatus);
+jobRouter.patch("/:id/applications/:applicantId", authenticate, validateUpdateApplicationStatus, updateApplicationStatus);
 
 /**
  * GET /api/v1/job/related/:id
@@ -190,8 +230,5 @@ jobRouter.patch("/:id/applications/:applicantId", authenticate, updateApplicatio
  * Allowed Roles: All
  */
 jobRouter.get("/related/:id", getRelatedJobs);
-
-
-
 
 export default jobRouter;
