@@ -114,7 +114,7 @@ httpServer.listen(PORT, async () => {
   }
 
   // Auto embed and sync (expensive on larger scales!) all jobs from mongodb to chromadb on production enviroment
-  if (NODE_ENV === "production" || true) {
+  if (NODE_ENV === "production") {
     await syncAllJobsToChroma();
   }
 });
