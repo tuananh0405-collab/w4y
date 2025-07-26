@@ -5,6 +5,7 @@ import Job from "../models/job.model.js";
 import ApplicantProfile from "../models/applicantProfile.model.js";
 import transporter from '../config/nodemailer.js';
 import { EMAIL_ACCOUNT } from '../config/env.js';
+import { body } from 'express-validator';
 
 // Cấu hình multer để lưu file CV với multer
 const storage = multer.diskStorage({
@@ -34,6 +35,71 @@ const upload = multer({
   fileFilter: fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }  // Giới hạn kích thước file tối đa (10MB)
 });
+
+export const applyJobLibrary = async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    const { resumeId, coverLetter } = req.body || {}; // Match frontend's resumeId
+    const applicantId = req.user._id;
+
+    // Validate resumeId
+    if (!resumeId) {
+      return res.status(400).json({ success: false, message: "resumeId is required" });
+    }
+
+    // Check if job exists
+    const job = await Job.findById(jobId);
+    if (!job) {
+      return res.status(404).json({ success: false, message: "Job not found" });
+    }
+
+    // Check if resume exists in Applicant's profile
+    const applicantProfile = await ApplicantProfile.findOne({ userId: applicantId });
+    if (!applicantProfile) {
+      console.log("No ApplicantProfile found for userId:", applicantId);
+      return res.status(404).json({ success: false, message: "Applicant profile not found" });
+    }
+
+    console.log("ApplicantProfile resumeFiles:", applicantProfile.resumeFiles.map(file => ({
+      _id: file._id,
+      path: file.path,
+    })));
+    const resume = applicantProfile.resumeFiles.find(
+      (file) => file._id && file._id.toString() === resumeId.toString()
+    );
+    if (!resume) {
+      console.log("No resume found with resumeId:", resumeId, "Type:", typeof resumeId);
+      console.log("Available resumeIds:", applicantProfile.resumeFiles.map(file => file._id.toString()));
+      return res.status(404).json({ success: false, message: "Resume not found" });
+    }
+
+    // Check if applicant has already applied for this job
+    const existingApplication = await Application.findOne({ jobId, applicantId });
+    if (existingApplication) {
+      return res.status(400).json({ success: false, message: "You have already applied for this job" });
+    }
+
+    // Create application with resumeFile from the found resume
+    const application = await Application.create({
+      jobId,
+      applicantId,
+      status: "Pending",
+      resumeFile: {
+        path: resume.path,
+        contentType: resume.contentType || "application/pdf",
+      },
+      coverLetter, // Include coverLetter if provided
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Application submitted successfully",
+      data: application,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // Ứng viên nộp đơn ứng tuyển kèm theo CV
 export const applyJob = [
