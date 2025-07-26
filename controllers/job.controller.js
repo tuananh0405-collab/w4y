@@ -920,9 +920,11 @@ export const getRecommendedJobs = async (req, res, next) => {
       ];
     }
 
+    /*
     if (profile.skillIds && profile.skillIds.length > 0) {
       recommendationQuery.skillIds = { $in: profile.skillIds };
     }
+    */
 
     // Get recommended jobs
     const recommendedJobs = await Job.find(recommendationQuery)
@@ -973,7 +975,6 @@ export const getRecommendedJobs = async (req, res, next) => {
  */
 export const getAIRecommendedJobs = async (req, res, next) => {
   try {
-    // 1. Check if user is an applicant
     if (req.user.accountType !== "Ứng Viên") {
       return res.status(403).json({
         success: false,
@@ -981,25 +982,50 @@ export const getAIRecommendedJobs = async (req, res, next) => {
       });
     }
 
-    // 2. Get applicant profile and populate their skills
-    const profile = await ApplicantProfile.findOne({
+    const applicantProfile = await ApplicantProfile.findOne({
       userId: req.user._id,
-    }).populate("skillIds", "name"); // Assumes profile has 'skillIds' ref to JobSkill
+    }).populate("skillIds", "name"); // Assumes applicantProfile has 'skillIds' ref to JobSkill
 
-    if (!profile) {
+    if (!applicantProfile) {
       return res.status(200).json({
         success: true,
-        message: "No profile found to generate AI recommendations.",
+        message: "No applicantProfile found to generate AI recommendations.",
         data: [],
       });
     }
 
-    // 3. Construct a query text from the user's profile for ChromaDB
-    const skillNames =
-      profile.skillIds?.map((skill) => skill.name).join(", ") || "none";
-    const queryText = `Title: ${
-      profile.jobTitle || ""
-    }. Skills: ${skillNames}.`;
+    let queryText = `Title: ${applicantProfile.jobTitle || "None"}. `;
+
+    if (check.nonEmptyArray(applicantProfile.skillIds)) {
+      const skillNames =
+        applicantProfile.skillIds.map((skill) => skill.name).join(", ") ||
+        "none";
+      queryText += `skills: ${skillNames}.`;
+    }
+
+    if (check.assigned(applicantProfile.jobTitle)) {
+      queryText += `Job Title: ${JSON.stringify(applicantProfile.jobTitle)}. `;
+    }
+
+    if (check.nonEmptyArray(applicantProfile.skills)) {
+      queryText += `skills: ${JSON.stringify(applicantProfile.skills)}. `;
+    }
+
+    if (check.nonEmptyArray(applicantProfile.education)) {
+      queryText += `education: ${JSON.stringify(applicantProfile.education)}. `;
+    }
+
+    if (check.nonEmptyArray(applicantProfile.experience)) {
+      queryText += `experience: ${JSON.stringify(applicantProfile.experience)}. `;
+    }
+
+    if (check.assigned(applicantProfile.openToWork)) {
+      queryText += `Is open to work: ${JSON.stringify(applicantProfile.openToWork)}. `;
+    }
+
+    if (check.assigned(applicantProfile.timeWork)) {
+      queryText += `Work Time: ${JSON.stringify(applicantProfile.timeWork)}. `;
+    }
 
     // 4. Query ChromaDB to get the most relevant job IDs
     const recommendedJobIds = await queryJobsFromChroma(queryText, 10);
