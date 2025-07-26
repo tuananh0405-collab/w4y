@@ -8,7 +8,13 @@ const applicantProfileSchema = new mongoose.Schema({
     required: true,
   },
   jobTitle: { type: String, default: '' },   // Thêm trường chức danh
-  skills: [String],
+  skills: [String], // Deprecated, kept to prevent conflicts
+  skillIds: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "JobSkill",
+    },
+  ],
   resumeFiles: [  // Thay đổi ở đây: mảng chứa nhiều file
     {
       path: String,

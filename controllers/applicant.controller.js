@@ -10,7 +10,7 @@ import { console } from "inspector";
 import convertApi from "../config/convertdocx.js";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
-import Project from '../models/project.model.js';
+import Project from "../models/project.model.js";
 import connectS3 from "../config/aws-s3.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import check from "check-types";
@@ -37,7 +37,7 @@ const storage = new CloudinaryStorage({
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /pdf|docx|txt|document/;
   const extname = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase()
+    path.extname(file.originalname).toLowerCase(),
   );
   const mimetype = allowedTypes.test(file.mimetype);
 
@@ -90,7 +90,7 @@ export const uploadCV = [
           {
             File: tmpInputPath,
           },
-          ext.slice(1)
+          ext.slice(1),
         ); // sẽ là "docx" hoặc "txt"
 
         // Tải file PDF đã chuyển đổi về bộ nhớ
@@ -98,7 +98,7 @@ export const uploadCV = [
         const response = await fetch(result.response.Files[0].Url);
         if (!response.ok) {
           throw new Error(
-            `Failed to download converted file: ${response.statusText}`
+            `Failed to download converted file: ${response.statusText}`,
           );
         }
         // Chuyển đổi response thành buffer
@@ -141,7 +141,7 @@ export const uploadCV = [
             message: "CV uploaded and converted successfully",
             data: applicantProfile ? applicantProfile.resumeFiles : [fileInfo],
           });
-        }
+        },
       );
 
       uploadStream.end(bufferToUpload);
@@ -192,7 +192,7 @@ export const deleteUploadedCV = async (req, res, next) => {
     }
     // Tìm và xóa CV trên Cloudinary
     const cvToDelete = applicantProfile.resumeFiles.find(
-      (cv) => cv._id.toString() === cvId
+      (cv) => cv._id.toString() === cvId,
     );
     if (cvToDelete) {
       const publicId = cvToDelete.path.split("/").pop(); // Lấy public_id từ đường dẫn
@@ -201,7 +201,7 @@ export const deleteUploadedCV = async (req, res, next) => {
     }
     // Tìm và xóa CV trong mảng resumeFiles
     applicantProfile.resumeFiles = applicantProfile.resumeFiles.filter(
-      (cv) => cv._id.toString() !== cvId
+      (cv) => cv._id.toString() !== cvId,
     );
 
     await applicantProfile.save();
@@ -218,9 +218,10 @@ export const deleteUploadedCV = async (req, res, next) => {
 // Lấy thông tin hồ sơ của ứng viên
 export const getProfile = async (req, res, next) => {
   try {
-
     const applicantId = req.user._id; // Lấy applicantId từ JWT
-    const applicantProfile = await ApplicantProfile.findOne({ userId: applicantId }).populate("userId", "name email phone district city");
+    const applicantProfile = await ApplicantProfile.findOne({
+      userId: applicantId,
+    }).populate("userId", "name email phone district city");
 
     if (!applicantProfile) {
       const newProfile = new ApplicantProfile({
@@ -245,36 +246,55 @@ export const getProfile = async (req, res, next) => {
   }
 };
 
-
 // Cập nhật hồ sơ của ứng viên
 export const updateProfile = async (req, res, next) => {
   try {
     const {
       jobTitle,
       skills,
+      skillIds,
       userDetail,
       level,
       education,
       experience,
       openToWork,
-      timeWork
+      timeWork,
     } = req.body;
 
-    const updateData = {
-      jobTitle,
-      skills,
-      userDetail,
-      level,
-      education,
-      experience,
-      openToWork,
-      timeWork
-    };
+    const updateData = {};
+
+    if (!check.undefined(jobTitle)) {
+      updateData.jobTitle = jobTitle;
+    }
+    if (!check.undefined(skills)) {
+      updateData.skills = skills;
+    }
+    if (!check.undefined(skillIds)) {
+      updateData.skillIds = skillIds;
+    }
+    if (!check.undefined(userDetail)) {
+      updateData.userDetail = userDetail;
+    }
+    if (!check.undefined(level)) {
+      updateData.level = level;
+    }
+    if (!check.undefined(education)) {
+      updateData.education = education;
+    }
+    if (!check.undefined(experience)) {
+      updateData.experience = experience;
+    }
+    if (!check.undefined(openToWork)) {
+      updateData.openToWork = openToWork;
+    }
+    if (!check.undefined(timeWork)) {
+      updateData.timeWork = timeWork;
+    }
 
     const updatedProfile = await ApplicantProfile.findOneAndUpdate(
       { userId: req.user._id },
       { $set: updateData },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedProfile) {
@@ -288,7 +308,6 @@ export const updateProfile = async (req, res, next) => {
       success: true,
       message: "Profile updated successfully",
       data: updatedProfile,
-
     });
   } catch (error) {
     next(error);
@@ -391,35 +410,44 @@ export const createProject = [
   // upload.array('mediaFiles'), // Sử dụng multer để upload nhiều file
   async (req, res, next) => {
     try {
-      const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+      const applicantProfile = await ApplicantProfile.findOne({
+        userId: req.user._id,
+      });
 
-    if (!applicantProfile) {
-      return res.status(404).json({ success: false, message: "Applicant profile not found" });
+      if (!applicantProfile) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Applicant profile not found" });
+      }
+
+      const newProject = new Project({
+        ...req.body,
+        applicantId: applicantProfile._id,
+      });
+
+      await newProject.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Project created successfully",
+        data: newProject,
+      });
+    } catch (error) {
+      next(error);
     }
-
-    const newProject = new Project({
-      ...req.body,
-      applicantId: applicantProfile._id,
-    });
-
-    await newProject.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Project created successfully",
-      data: newProject,
-    });
-  } catch (error) {
-    next(error);
-  }
-}];
+  },
+];
 
 // Lấy tất cả project của applicant hiện tại
 export const getMyProjects = async (req, res, next) => {
   try {
-    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
+    const applicantProfile = await ApplicantProfile.findOne({
+      userId: req.user._id,
+    });
     if (!applicantProfile) {
-      return res.status(404).json({ success: false, message: "Applicant profile not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Applicant profile not found" });
     }
 
     const projects = await Project.find({ applicantId: applicantProfile._id });
@@ -442,19 +470,28 @@ export const updateProject = async (req, res, next) => {
     const project = await Project.findById(projectId);
 
     if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Project not found" });
     }
 
     // Kiểm tra quyền sở hữu
-    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
-    if (!applicantProfile || !project.applicantId.equals(applicantProfile._id)) {
+    const applicantProfile = await ApplicantProfile.findOne({
+      userId: req.user._id,
+    });
+    if (
+      !applicantProfile ||
+      !project.applicantId.equals(applicantProfile._id)
+    ) {
       return res.status(403).json({ success: false, message: "Unauthorized" });
     }
 
     Object.assign(project, req.body);
     await project.save();
 
-    res.status(200).json({ success: true, message: "Project updated", data: project });
+    res
+      .status(200)
+      .json({ success: true, message: "Project updated", data: project });
   } catch (error) {
     next(error);
   }
@@ -468,18 +505,27 @@ export const deleteProject = async (req, res, next) => {
     const project = await Project.findById(projectId);
 
     if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Project not found" });
     }
 
     for (const media of project.media) {
       const key = media.url.split("amazonaws.com/")[1];
       if (key) {
-        await s3Client.send(new DeleteObjectCommand({ Bucket: "career-shift", Key: key }));
+        await s3Client.send(
+          new DeleteObjectCommand({ Bucket: "career-shift", Key: key }),
+        );
       }
     }
 
-    const applicantProfile = await ApplicantProfile.findOne({ userId: req.user._id });
-    if (!applicantProfile || !project.applicantId.equals(applicantProfile._id)) {
+    const applicantProfile = await ApplicantProfile.findOne({
+      userId: req.user._id,
+    });
+    if (
+      !applicantProfile ||
+      !project.applicantId.equals(applicantProfile._id)
+    ) {
       return res.status(403).json({ success: false, message: "Unauthorized" });
     }
 
